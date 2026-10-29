@@ -71,7 +71,8 @@ namespace BoomerangFoo.Patches
         static void Postfix(Player __instance)
         {
             PatchPlayer.InvokePostSpawnIn(__instance);
-            PowerupType startupPowers = GameMode.selected.gameSettings.StartupPowerUps;
+            var gameSettings = GameMode.selected.gameSettings;
+            PowerupType startupPowers = CommonFunctions.IsBot(__instance) ? gameSettings.BotStartupPowerUps : gameSettings.HumanStartupPowerUps;
             if (startupPowers != 0 && Singleton<GameManager>.Instance.roundNumber == 1)
             {
                 CommonFunctions.GetEnumPowerUpValues(startupPowers).ForEach(delegate (PowerupType i)

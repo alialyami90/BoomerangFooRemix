@@ -668,5 +668,83 @@
     "translations": {
       "English": "%s%x"
     }
+  },
+  "ModifierHumanStartPowers": {
+    "description": "Modifier for powerups human players start the match with.",
+    "translations": {
+      "English": "Human Starting Powers"
+    }
+  },
+  "ModifierBotStartPowers": {
+    "description": "Modifier for powerups bots start the match with.",
+    "translations": {
+      "English": "Bot Starting Powers"
+    }
+  },
+  "ModifierHumanPickupPool": {
+    "description": "Modifier for which powerups human players can get from pickups.",
+    "translations": {
+      "English": "Human Pickup Pool"
+    }
+  },
+  "ModifierBotPickupPool": {
+    "description": "Modifier for which powerups bots can get from pickups.",
+    "translations": {
+      "English": "Bot Pickup Pool"
+    }
+  },
+  "ModifierSpawnWeightsHeader": {
+    "description": "Header for the per-powerup spawn weight sliders.",
+    "translations": {
+      "English": "Powerup Spawn Weights"
+    }
+  },
+  "SpawnWeightRare": {
+    "description": "Spawn weight option: 0.25x.",
+    "translations": {
+      "English": "Rare"
+    }
+  },
+  "SpawnWeightLow": {
+    "description": "Spawn weight option: 0.5x.",
+    "translations": {
+      "English": "Low"
+    }
+  },
+  "SpawnWeightNormal": {
+    "description": "Spawn weight option: 1x.",
+    "translations": {
+      "English": "Normal"
+    }
+  },
+  "SpawnWeightHigh": {
+    "description": "Spawn weight option: 2x.",
+    "translations": {
+      "English": "High"
+    }
+  },
+  "SpawnWeightVeryHigh": {
+    "description": "Spawn weight option: 4x.",
+    "translations": {
+      "English": "Very High"
+    }
+  },
+  "SpawnWeightHintOff": {
+    "description": "Hint for a powerup that never comes from pickups.",
+    "translations": {
+      "English": "Never comes from pickups"
+    }
+  },
+  "SpawnWeightHintNormal": {
+    "description": "Hint for a powerup with the default spawn weight.",
+    "translations": {
+      "English": "Default chance"
+    }
+  },
+  "SpawnWeightHint": {
+    "description": "Hint for a powerup spawn weight multiplier.",
+    "translations": {
+      "English": "%s%x as likely as normal"
+    }
   }
 }

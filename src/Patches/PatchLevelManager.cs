@@ -94,6 +94,75 @@ namespace BoomerangFoo.Patches
         }
     }
 
+    [HarmonyPatch]
+    class LevelManagerSelectRandomPowerPatch
+    {
+        static MethodBase TargetMethod()
+        {
+            return AccessTools.Method(typeof(LevelManager), nameof(LevelManager.SelectRandomPower), [typeof(Player)]);
+        }
+
+        static bool Prepare()
+        {
+            if (TargetMethod() == null)
+            {
+                BoomerangFoo.Logger.LogWarning("LevelManager.SelectRandomPower(Player) not found. Pickup pools and spawn weights are disabled.");
+                return false;
+            }
+            return true;
+        }
+
+        // Applies the human/bot pickup pools and per-powerup spawn weights.
+        // Falls back to the original selection when nothing is customized or no candidate remains.
+        static bool Prefix(LevelManager __instance, Player __0, ref PowerupType __result)
+        {
+            GameSettings gameSettings = GameMode.selected?.gameSettings;
+            if (gameSettings == null || __instance.possiblePowerups == null) return true;
+
+            Player player = __0;
+            PowerupType pool = PowerupType.None;
+            PowerupType owned = PowerupType.None;
+            if (player != null)
+            {
+                pool = CommonFunctions.IsBot(player) ? gameSettings.BotPowerupPool : gameSettings.HumanPowerupPool;
+                owned = player.activePowerup;
+            }
+
+            bool customized = false;
+            float totalWeight = 0f;
+            List<PowerupType> candidates = [];
+            List<float> weights = [];
+            foreach (PowerupType powerup in __instance.possiblePowerups)
+            {
+                if (powerup == PowerupType.None) continue;
+
+                float weight = gameSettings.PowerupSpawnWeights.TryGetValue(powerup, out float w) ? w : 1f;
+                bool inPool = player == null || (pool & powerup) != 0;
+                if (weight != 1f || !inPool) customized = true;
+                if (!inPool || weight <= 0f || (owned & powerup) != 0) continue;
+
+                candidates.Add(powerup);
+                weights.Add(weight);
+                totalWeight += weight;
+            }
+
+            if (!customized || totalWeight <= 0f) return true;
+
+            float roll = UnityEngine.Random.value * totalWeight;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                roll -= weights[i];
+                if (roll < 0f)
+                {
+                    __result = candidates[i];
+                    return false;
+                }
+            }
+            __result = candidates[candidates.Count - 1];
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(LevelManager), nameof(LevelManager.BuildMatchPlaylist))]
     class LevelManagerBuildMatchPlaylistPatch
     {

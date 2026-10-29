@@ -14,7 +14,15 @@ namespace BoomerangFoo.Settings
         public int MatchScoreLimit = _CustomSettings.MatchScoreLimit;
         public float SuddenDeathTimeLimit = _CustomSettings.SuddenDeathTimeLimit;
 
-        public PowerupType StartupPowerUps = _CustomSettings.StartupPowerUps;
+        public PowerupType HumanStartupPowerUps = _CustomSettings.StartupPowerUps;
+        public PowerupType BotStartupPowerUps = _CustomSettings.StartupPowerUps;
+
+        // Powerups each side may receive from pickups (intersected with the game's available powerups)
+        public PowerupType HumanPowerupPool = Powerup.AllPowerups();
+        public PowerupType BotPowerupPool = Powerup.AllPowerups();
+        // Relative pickup weight per powerup; missing entries count as 1
+        public Dictionary<PowerupType, float> PowerupSpawnWeights = [];
+
         public bool NoBoomerangs = true;
 
         public float KnockbackFactor = 1f;

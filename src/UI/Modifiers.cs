@@ -353,6 +353,14 @@ namespace BoomerangFoo.UI
             }
         }
 
+        public List<PowerupType> GetPowerupToggleTypes()
+        {
+            if (type != Type.Powerup) return [];
+
+            var toggles = gameObject.transform.GetChild(2).transform.GetComponentsInChildren<UIPowerupToggle>(true);
+            return toggles.Select(toggle => toggle.powerupType).Where(powerup => powerup != PowerupType.None).Distinct().ToList();
+        }
+
         public int GetSelectedIndex()
         {
             if (type == Type.Slider)

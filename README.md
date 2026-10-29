@@ -42,7 +42,9 @@ The simplest way to disable the mod is to remove `Bepinex/plugins/BoomerangFoo/B
 - Match length: Set any number of points to win.
 - Rapid powerup spawns: The powerup spawn rate can be boosted.
 - Max powerups: Change the maximum number of powerups a player can hold.
-- Starting powerups: Give each of the players powerups at the beginning of the match.
+- Starting powerups: Give human players and bots separate sets of powerups at the beginning of the match.
+- Pickup pools: Choose which powerups human players and bots can each get from pickups.
+- Powerup spawn weights: Make individual powerups come from pickups more or less often (Off / Rare / Low / Normal / High / Very High).
 - Bouncy boomerangs: Multiply or dampen the bounciness of boomerangs off walls. Be careful in enclosed spaces...
 - Boomerang size: Change the size of boomerangs.
 3. Powerup modifiers (described below)

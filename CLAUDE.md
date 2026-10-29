@@ -58,6 +58,11 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `GenerateUI()` calls `base.GenerateUI()` (header row `customPowerup.<Name>.header`), then clones rows with IDs `customPowerup.<Name>.<setting>`.
 - Per-player values live on `PlayerState`. Its field initializers copy from the singletons when the component is added in `Player.Start`. Retrieve it with `CommonFunctions.GetPlayerState(player)`.
 
+### Human vs bot powerups and spawn weights
+- Global settings `humanStartPowers` and `botStartPowers` are toggle grids that give their side starting powerups (round 1 only, `PlayerSpawnInPatch`). `humanPickupPool` and `botPickupPool` restrict what each side can get from pickups. `spawnWeights.<PowerupType>` sliders run Off/Rare/Low/Normal/High/Very High (0, 0.25, 0.5, 1, 2, 4×), with one generated per toggle in the vanilla `powerupSelections` grid. Values go into `GameSettings` (`Human/BotStartupPowerUps`, `Human/BotPowerupPool`, `PowerupSpawnWeights`).
+- `LevelManagerSelectRandomPowerPatch` (in `PatchLevelManager.cs`) prefixes `LevelManager.SelectRandomPower(Player)`. It filters `possiblePowerups` by side pool, weight > 0 and powerups not already owned, then makes a weighted pick. It returns to the original method when nothing is customized or no candidate is left. Its `Prepare()` skips the patch if the method is not found. The game's selection code isn't available to read, so any deck or exclusion rules inside the original are bypassed only while customizations are active.
+- `CommonFunctions.IsBot(player)` finds bots by reflection: it uses the first `PlayerType` field or property on `Player`, falling back to an `*AI*` component. Which method it used is logged once.
+
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:
 - the lobby bot slider and cloned `UILobbyPlayer`s (`PatchUIMenuLobby`)
