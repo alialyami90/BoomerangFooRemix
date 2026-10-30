@@ -1,12 +1,14 @@
 ﻿using BoomerangFoo.Powerups;
 using BoomerangFoo.Settings;
 using BoomerangFoo.UI;
+using I2.Loc;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace BoomerangFoo.GameModes
@@ -271,19 +273,76 @@ namespace BoomerangFoo.GameModes
                     gameMode.gameSettings.GameSpeed = (float)gameSpeedValues[sliderIndex] / 100;
                 });
             }
-            if (!Modifiers.settings.ContainsKey("startPowers"))
+            if (!Modifiers.settings.ContainsKey("humanStartPowers"))
             {
-                var test = Modifiers.CloneModifierSetting("startPowers", "Starting Powers", "powerupSelections", "maxPowerups");
-                test.PreparePowerupToggles(PowerupType.None);
-                test.SetGameStartCallback((gameMode, powerups) =>
+                var humanStart = Modifiers.CloneModifierSetting("humanStartPowers", "ModifierHumanStartPowers", "powerupSelections", "maxPowerups");
+                humanStart.PreparePowerupToggles(PowerupType.None);
+                humanStart.SetGameStartCallback((gameMode, powerups) =>
                 {
-                    gameMode.gameSettings.StartupPowerUps = (PowerupType)powerups;
+                    gameMode.gameSettings.HumanStartupPowerUps = (PowerupType)powerups;
                 });
+            }
+            if (!Modifiers.settings.ContainsKey("botStartPowers"))
+            {
+                var botStart = Modifiers.CloneModifierSetting("botStartPowers", "ModifierBotStartPowers", "powerupSelections", "humanStartPowers");
+                botStart.PreparePowerupToggles(PowerupType.None);
+                botStart.SetGameStartCallback((gameMode, powerups) =>
+                {
+                    gameMode.gameSettings.BotStartupPowerUps = (PowerupType)powerups;
+                });
+            }
+            if (!Modifiers.settings.ContainsKey("humanPickupPool"))
+            {
+                var humanPool = Modifiers.CloneModifierSetting("humanPickupPool", "ModifierHumanPickupPool", "powerupSelections", "botStartPowers");
+                humanPool.PreparePowerupToggles(Powerup.AllPowerups());
+                humanPool.SetGameStartCallback((gameMode, powerups) =>
+                {
+                    gameMode.gameSettings.HumanPowerupPool = (PowerupType)powerups;
+                });
+            }
+            if (!Modifiers.settings.ContainsKey("botPickupPool"))
+            {
+                var botPool = Modifiers.CloneModifierSetting("botPickupPool", "ModifierBotPickupPool", "powerupSelections", "humanPickupPool");
+                botPool.PreparePowerupToggles(Powerup.AllPowerups());
+                botPool.SetGameStartCallback((gameMode, powerups) =>
+                {
+                    gameMode.gameSettings.BotPowerupPool = (PowerupType)powerups;
+                });
+            }
+            if (!Modifiers.settings.ContainsKey("spawnWeights.header"))
+            {
+                var header = Modifiers.CloneModifierSetting("spawnWeights.header", "ModifierSpawnWeightsHeader", "ui_boomerangs", "botPickupPool");
+                string weightAttach = header.id;
+                float[] weightValues = [0f, 0.25f, 0.5f, 1f, 2f, 4f];
+                string[] weightOptions = ["ui_off", "SpawnWeightRare", "SpawnWeightLow", "SpawnWeightNormal", "SpawnWeightHigh", "SpawnWeightVeryHigh"];
+                string[] weightHints = ["SpawnWeightHintOff", "SpawnWeightHint__0.25", "SpawnWeightHint__0.5", "SpawnWeightHintNormal", "SpawnWeightHint__2", "SpawnWeightHint__4"];
+                foreach (PowerupType powerup in Modifiers.settings["powerupSelections"].GetPowerupToggleTypes())
+                {
+                    string weightId = $"spawnWeights.{powerup}";
+                    var weight = Modifiers.CloneModifierSetting(weightId, GetPowerupLabel(powerup), "ui_label_edgeprotection", weightAttach);
+                    weight.SetSliderOptions(weightOptions, 3, weightHints);
+                    weight.SetGameStartCallback((gameMode, sliderIndex) =>
+                    {
+                        gameMode.gameSettings.PowerupSpawnWeights[powerup] = weightValues[sliderIndex];
+                    });
+                    weightAttach = weightId;
+                }
             }
             foreach (var powerup in CustomPowerup.Registered)
             {
                 powerup.GenerateUI();
             }
+        }
+
+        private static string GetPowerupLabel(PowerupType powerup)
+        {
+            // Game terms follow powerup_<enum name>, e.g. powerup_movefaster
+            string term = $"powerup_{powerup.ToString().ToLower()}";
+            if (!string.IsNullOrEmpty(LocalizationManager.GetTranslation(term)))
+            {
+                return term;
+            }
+            return Regex.Replace(powerup.ToString(), "(?<!^)([A-Z])", " $1");
         }
     }
 }
