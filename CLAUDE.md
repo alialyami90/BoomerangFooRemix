@@ -63,6 +63,12 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `LevelManagerSelectRandomPowerPatch` (in `PatchLevelManager.cs`) prefixes `LevelManager.SelectRandomPower(Player)`. It filters `possiblePowerups` by side pool, weight > 0 and powerups not already owned, then makes a weighted pick. It returns to the original method when nothing is customized or no candidate is left. Its `Prepare()` skips the patch if the method is not found. The game's selection code isn't available to read, so any deck or exclusion rules inside the original are bypassed only while customizations are active.
 - `CommonFunctions.IsBot(player)` finds bots by reflection: it uses the first `PlayerType` field or property on `Player`, falling back to an `*AI*` component. Which method it used is logged once.
 
+### Match stats (round-end screen)
+- `Stats/MatchStats.cs` tracks per-playerID kills (opponents only, via `GameManager.AreOpponents`), deaths, self-eliminations, clean rounds and who-killed-whom tallies (nemesis / favorite victim). It is activated once in `Awake` and reset on `OnPreStartMatch`.
+- Deaths come from `PatchPlayer.OnPostDieConfirmed`, which fires only when `Player.Die` actually took the player from alive to `Actor.ActorState.Dead`. Decoy revives and no-op calls are excluded; `OnPostDie` still fires for every call. A death is a self-elimination when no other player was credited through `OnPreAddPlayerKill` during that `Die` call.
+- Clean rounds are counted once per `roundNumber` when the round-end screen opens (`PatchUIMenuRoundEnd.OnPostInit`).
+- `UI/MatchStatsUI.cs` adds a `BFooMatchStats` TextMeshPro label to each `UIScoreRow`. It sits right of the row's visible graphics and auto-sizes to the space left before the canvas edge. In team matches it shows team totals without nemesis/victim. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
+
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:
 - the lobby bot slider and cloned `UILobbyPlayer`s (`PatchUIMenuLobby`)
@@ -90,4 +96,5 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `GameSettings.NoBoomerangs` defaults to `true`. It only works because the `noBoomerangs` start callback overwrites it.
 - `ShieldPowerup.Deactivate` doesn't unsubscribe `OnPostSpawnIn`, and `TeamGolden.Unhook` doesn't clear `PatchPlayer.GoldenDiscPenalty`.
 - `_CustomSettings` is deprecated but still live. Its static constructor sets defaults; for example, `EnableDuplicatedCharacters = true` and `ShrinkingBoundsKicksOnly = false`. It also parses `customConfig.ini` from the working directory if that file exists. A few patches still read it directly (`EnableDuplicatedCharacters`, `ShrinkingBoundsKicksOnly`, `TeamGoldenBoomerang`, `SuddenDeathTimeLimit`, `BoomerangBouncinessMultiplierTiedToPowerUp`), and `GameSettings` field initializers copy their defaults from it. New settings belong in `GameSettings` and the Modifiers UI, not here.
+- `PatchPlayer.OnPreStartFall` is declared but never invoked; `PlayerStartFallPatch` only uses the `PreStartFall` override.
 - `eGameMode.cs` is unused (superseded by `GameMode.Slot`).

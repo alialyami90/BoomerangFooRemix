@@ -9,6 +9,9 @@ namespace BoomerangFoo.Patches
 {
     class PatchUIMenuRoundEnd
     {
+        public static event Action<UIMenuRoundEnd> OnPostInit;
+        public static void InvokePostInit(UIMenuRoundEnd menu) { OnPostInit?.Invoke(menu); }
+
         public static void EnsureMaxPlayers(UIMenuRoundEnd __instance)
         {
             int maxPlayers = ModSettings.Instance.MaxPlayers;
@@ -90,6 +93,8 @@ namespace BoomerangFoo.Patches
             {
                 vertLayout.spacing = 0f;
             }
+
+            PatchUIMenuRoundEnd.InvokePostInit(__instance);
         }
     }
 

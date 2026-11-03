@@ -27,5 +27,7 @@ namespace BoomerangFoo.Settings
 
         public float KnockbackFactor = 1f;
         public float GameSpeed = 1f;
+
+        public bool ShowMatchStats = true;
     }
 }
