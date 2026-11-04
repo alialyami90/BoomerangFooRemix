@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using BoomerangFoo.GameModes;
 using BoomerangFoo.Patches;
 using I2.Loc;
@@ -35,19 +37,20 @@ namespace BoomerangFoo.UI
         private static Canvas canvas;
         private static TMP_FontAsset font;
         private static UIPlayerIcon badgeTemplate;
-        private static bool loggedIcons = false;
+        private static int iconLogsLeft = 3;
+        private static bool retriedIcons = false;
         private static bool failed = false;
 
         public static void Activate()
         {
-            PatchUIMenuMatchSettings.OnPostInit += CacheIcons;
+            PatchUIMenuMatchSettings.OnPostInit += menu => CacheIcons("menu opened");
             PatchGameManager.OnPostUpdate += Update;
         }
 
         // The Available powerups grid in the Modifiers menu holds the game's icon for every powerup.
         // Frames, backgrounds and checkmarks use the same sprite on every button, so a powerup's icon
         // is the image whose sprite appears on that button only.
-        private static void CacheIcons(UIMenuMatchSettings menu)
+        private static void CacheIcons(string when)
         {
             if (!Modifiers.settings.TryGetValue("powerupSelections", out ModifierSetting grid)) return;
 
@@ -72,10 +75,10 @@ namespace BoomerangFoo.UI
                 report.Add($"{type}: [{string.Join(", ", images.Select(image => $"{image.name}={image.sprite.name}{(image == icon ? " <icon>" : "")}"))}]");
             }
 
-            if (!loggedIcons)
+            if (iconLogsLeft > 0)
             {
-                loggedIcons = true;
-                BoomerangFoo.Logger.LogInfo($"Powerup display: found icons for {icons.Count} of {buttons.Count} powerups. {string.Join(" ", report)}");
+                iconLogsLeft--;
+                BoomerangFoo.Logger.LogInfo($"Powerup display ({when}): found icons for {icons.Count} of {buttons.Count} powerups. {string.Join(" ", report)}");
             }
         }
 
@@ -165,6 +168,23 @@ namespace BoomerangFoo.UI
 
         private static void Rebuild(Panel panel, int corner, Player player)
         {
+            // The game may only fill in the grid's icons after the menu opens, so look again once in a round
+            if (icons.Count == 0 && !retriedIcons)
+            {
+                retriedIcons = true;
+                try
+                {
+                    CacheIcons("round started");
+                    LogSpriteFields("AlertBar", player.alertBar);
+                    var powerupBars = Singleton<GameManager>.Instance.powerupBars;
+                    LogSpriteFields("PowerupBar", player.playerID < powerupBars.Length ? powerupBars[player.playerID] : null);
+                }
+                catch (Exception e)
+                {
+                    BoomerangFoo.Logger.LogWarning($"Powerup display: icon retry failed, using text. {e.Message}");
+                }
+            }
+
             foreach (Transform child in panel.root.Cast<Transform>().ToList())
             {
                 UnityEngine.Object.Destroy(child.gameObject);
@@ -302,6 +322,44 @@ namespace BoomerangFoo.UI
                 label.outlineWidth = 0.25f;
                 label.outlineColor = new Color32(0, 0, 0, 255);
             }
+        }
+
+        // Diagnostic: shows where the game keeps powerup sprites, as another possible icon source
+        private static void LogSpriteFields(string owner, object instance)
+        {
+            if (instance == null)
+            {
+                BoomerangFoo.Logger.LogInfo($"Powerup display: no {owner} to inspect");
+                return;
+            }
+
+            List<string> parts = [];
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+            for (Type type = instance.GetType(); type != null && type != typeof(MonoBehaviour); type = type.BaseType)
+            {
+                foreach (FieldInfo field in type.GetFields(flags))
+                {
+                    object value = field.GetValue(instance);
+                    if (value is Sprite sprite)
+                    {
+                        parts.Add($"{field.Name}={(sprite != null ? sprite.name : "null")}");
+                    }
+                    else if (value is IEnumerable<Sprite> sprites)
+                    {
+                        parts.Add($"{field.Name}=[{string.Join(", ", sprites.Select(item => item != null ? item.name : "null"))}]");
+                    }
+                    else if (value is IEnumerable items && !(value is string))
+                    {
+                        Type element = field.FieldType.IsArray ? field.FieldType.GetElementType() : field.FieldType.GetGenericArguments().LastOrDefault();
+                        FieldInfo spriteField = element?.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).FirstOrDefault(f => f.FieldType == typeof(Sprite));
+                        if (spriteField != null)
+                        {
+                            parts.Add($"{field.Name}={items.Cast<object>().Count()} x {element.Name}.{spriteField.Name}");
+                        }
+                    }
+                }
+            }
+            BoomerangFoo.Logger.LogInfo($"Powerup display: {owner} sprite fields: {(parts.Count > 0 ? string.Join("; ", parts) : "none")}");
         }
 
         private static string PowerupName(PowerupType powerup)
