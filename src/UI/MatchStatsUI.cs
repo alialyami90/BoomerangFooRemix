@@ -24,6 +24,8 @@ namespace BoomerangFoo.UI
             bool teamMatch = Singleton<SettingsManager>.Instance.teamMatch;
             TextMeshProUGUI fontSource = menu.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(text => text.name != LabelName);
 
+            BoomerangFoo.Logger.LogInfo($"Match stats: round {gameManager.roundNumber}, {gameManager.players.Count} players, team match {teamMatch}, font source {(fontSource != null ? fontSource.name : "none")}");
+
             // Make sure the rows have their final layout before measuring them
             Canvas.ForceUpdateCanvases();
 
