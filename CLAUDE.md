@@ -83,7 +83,10 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `Stats/MatchStats.cs` tracks per-playerID kills (opponents only, via `GameManager.AreOpponents`), deaths, self-eliminations, clean rounds and who-killed-whom tallies (nemesis / favorite victim). It is activated once in `Awake` and reset on `OnPreStartMatch`.
 - Deaths come from `PatchPlayer.OnPostDieConfirmed`, which fires only when `Player.Die` actually took the player from alive to `Actor.ActorState.Dead`. Decoy revives and no-op calls are excluded; `OnPostDie` still fires for every call. A death is a self-elimination when no other player was credited through `OnPreAddPlayerKill` during that `Die` call.
 - Clean rounds are counted once per `roundNumber` when the round-end screen opens (`PatchUIMenuRoundEnd.OnPostInit`).
-- `UI/MatchStatsUI.cs` adds a `BFooMatchStats` TextMeshPro label to each `UIScoreRow`. It sits right of the row's visible graphics and auto-sizes to the space left before the canvas edge. In team matches it shows team totals without nemesis/victim. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
+- `UI/MatchStatsUI.cs` draws a table under the score bars on its own overlay canvas (`BFooMatchStats`, sortingOrder 1000), so the score screen itself is never modified. Columns: KILLS, DEATHS, K/D, FELL / SELF, ROUNDS SURVIVED, KILLED YOU MOST, YOU KILLED MOST.
+- Its style is copied from the screen: each row uses the largest visible sprite of its `UIScoreRow` (the rounded bar, in the player's colour), a copy of the row's `UIPlayerIcon`, and the game's TextMeshPro font. "Who" cells show the other player's `characterIconSprite` face.
+- Placement comes from the score rows' on-screen bounds, re-checked every frame while the menu is open because the rows slide in. Width is at most 56% of the screen, centred, so it stays between SAVE REPLAY and CONTINUE. Rows shrink to fit; below 24 px it shows the top 6 by kills, and with no room at all it hides.
+- It hides when the `UIMenuRoundEnd` object is no longer active. Team matches show team totals without the two "who" columns. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
 
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:

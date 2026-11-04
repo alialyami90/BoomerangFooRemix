@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using BoomerangFoo.GameModes;
+using BoomerangFoo.Patches;
 using BoomerangFoo.Stats;
 using I2.Loc;
 using TMPro;
@@ -10,155 +12,439 @@ using UnityEngine.UI;
 
 namespace BoomerangFoo.UI
 {
+    // Stats table under the round-end score bars, styled like them (player-coloured rounded bars, game font,
+    // P1/BOT badges, character faces). It lives on its own overlay canvas, so the game's score screen is never modified.
     public static class MatchStatsUI
     {
-        private const string LabelName = "BFooMatchStats";
-        private const float Margin = 16f;
-        private const float MinWidth = 120f;
+        private const float Gap = 16f;
+        private const float BottomMargin = 24f;
+        private const float RowSpacing = 6f;
+        private const float MaxRowHeight = 48f;
+        private const float MinRowHeight = 24f;
+        private const float HeaderShare = 0.75f;
+        private const int MaxCrampedRows = 6;
+        // Keeps the table between SAVE REPLAY and CONTINUE
+        private const float MaxWidthShare = 0.56f;
+        private const float BadgeWeight = 0.09f;
+
+        private enum Stat { Kills, Deaths, KillDeath, Self, Clean, Nemesis, Victim }
+
+        private static readonly (Stat stat, string term, string fallback, float weight)[] Columns =
+        [
+            (Stat.Kills, "MatchStatsKills", "KILLS", 0.10f),
+            (Stat.Deaths, "MatchStatsDeaths", "DEATHS", 0.10f),
+            (Stat.KillDeath, "MatchStatsKD", "K/D", 0.09f),
+            (Stat.Self, "MatchStatsSelf", "FELL / SELF", 0.12f),
+            (Stat.Clean, "MatchStatsClean", "ROUNDS SURVIVED", 0.16f),
+            (Stat.Nemesis, "MatchStatsNemesis", "KILLED YOU MOST", 0.17f),
+            (Stat.Victim, "MatchStatsVictim", "YOU KILLED MOST", 0.17f),
+        ];
+
+        private class Entry
+        {
+            public int row;
+            public UIScoreRow scoreRow;
+            public int kills, deaths, self, clean;
+            public (int playerId, int count)? nemesis, victim;
+        }
+
         private static readonly Vector3[] corners = new Vector3[4];
+        private static Canvas canvas;
+        private static RectTransform tableRoot;
+        private static UIMenuRoundEnd currentMenu;
+        private static Rect lastBars;
+        private static bool loggedNoRoom = false;
+
+        public static void Activate()
+        {
+            PatchGameManager.OnPostUpdate += Tick;
+        }
 
         public static void Show(UIMenuRoundEnd menu)
         {
-            bool enabled = GameMode.selected?.gameSettings?.ShowMatchStats ?? true;
-            GameManager gameManager = Singleton<GameManager>.Instance;
-            bool teamMatch = Singleton<SettingsManager>.Instance.teamMatch;
-            TMP_FontAsset font = FindFont(menu);
+            currentMenu = menu;
+            Layout(force: true);
+        }
 
-            BoomerangFoo.Logger.LogInfo($"Match stats: round {gameManager.roundNumber}, {gameManager.players.Count} players, team match {teamMatch}, font {(font != null ? font.name : "none")}");
+        // Hides the table with the score screen, and follows the score bars while they slide into place
+        private static void Tick(GameManager gameManager)
+        {
+            try
+            {
+                if (currentMenu == null || !currentMenu.gameObject.activeInHierarchy)
+                {
+                    currentMenu = null;
+                    Hide();
+                    return;
+                }
+                Layout(force: false);
+            }
+            catch (Exception e)
+            {
+                BoomerangFoo.Logger.LogError($"Match stats table failed: {e}");
+                currentMenu = null;
+                Hide();
+            }
+        }
+
+        private static void Hide()
+        {
+            if (canvas != null && canvas.gameObject.activeSelf) canvas.gameObject.SetActive(false);
+        }
+
+        private static void Layout(bool force)
+        {
+            if (!(GameMode.selected?.gameSettings?.ShowMatchStats ?? true))
+            {
+                Hide();
+                return;
+            }
+
+            EnsureCanvas();
+            Rect? bars = BarsRect(currentMenu);
+            if (bars == null)
+            {
+                Hide();
+                return;
+            }
+            if (!force && Mathf.Abs(bars.Value.yMin - lastBars.yMin) < 1f && Mathf.Abs(bars.Value.center.x - lastBars.center.x) < 1f) return;
+
+            lastBars = bars.Value;
+            canvas.gameObject.SetActive(true);
+            Build(currentMenu, bars.Value);
+        }
+
+        private static void EnsureCanvas()
+        {
+            if (canvas != null) return;
+
+            var canvasObject = new GameObject("BFooMatchStats");
+            UnityEngine.Object.DontDestroyOnLoad(canvasObject);
+            canvas = canvasObject.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            // Above the score screen
+            canvas.sortingOrder = 1000;
+            var scaler = canvasObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 1f;
+
+            var root = new GameObject("Table", typeof(RectTransform));
+            tableRoot = (RectTransform)root.transform;
+            tableRoot.SetParent(canvasObject.transform, false);
+            tableRoot.anchorMin = new Vector2(0.5f, 0.5f);
+            tableRoot.anchorMax = new Vector2(0.5f, 0.5f);
+            tableRoot.pivot = new Vector2(0.5f, 1f);
+        }
+
+        // Bounds of the visible score rows in this canvas's units (origin at the screen centre)
+        private static Rect? BarsRect(UIMenuRoundEnd menu)
+        {
+            Canvas menuCanvas = menu.GetComponentInParent<Canvas>();
+            Camera camera = menuCanvas == null || menuCanvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : menuCanvas.rootCanvas.worldCamera;
+            var canvasRect = (RectTransform)canvas.transform;
+
+            float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+            bool any = false;
+            foreach (UIScoreRow row in menu.uiScoreRows)
+            {
+                if (row == null || !row.gameObject.activeInHierarchy) continue;
+                ((RectTransform)row.transform).GetWorldCorners(corners);
+                foreach (Vector3 corner in corners)
+                {
+                    Vector2 screen = RectTransformUtility.WorldToScreenPoint(camera, corner);
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, null, out Vector2 local);
+                    minX = Mathf.Min(minX, local.x);
+                    maxX = Mathf.Max(maxX, local.x);
+                    minY = Mathf.Min(minY, local.y);
+                    maxY = Mathf.Max(maxY, local.y);
+                    any = true;
+                }
+            }
+            return any ? Rect.MinMaxRect(minX, minY, maxX, maxY) : null;
+        }
+
+        private static void Build(UIMenuRoundEnd menu, Rect bars)
+        {
+            foreach (Transform child in tableRoot.Cast<Transform>().ToList())
+            {
+                UnityEngine.Object.Destroy(child.gameObject);
+            }
+
+            TMP_FontAsset font = FindFont(menu);
             if (font == null)
             {
                 BoomerangFoo.Logger.LogWarning("Match stats: no TextMeshPro font found, not showing stats.");
                 return;
             }
 
-            // Make sure the rows have their final layout before measuring them
-            Canvas.ForceUpdateCanvases();
+            GameManager gameManager = Singleton<GameManager>.Instance;
+            bool teamMatch = Singleton<SettingsManager>.Instance.teamMatch;
+            var columns = Columns.Where(column => !teamMatch || (column.stat != Stat.Nemesis && column.stat != Stat.Victim)).ToList();
+            List<Entry> entries = BuildEntries(menu, gameManager, teamMatch);
+            if (entries.Count == 0) return;
 
+            // Fit the rows into the space under the score bars; when too cramped, show the top players by kills
+            var canvasRect = ((RectTransform)canvas.transform).rect;
+            float width = Mathf.Min(bars.width, canvasRect.width * MaxWidthShare);
+            float top = bars.yMin - Gap;
+            float available = top - (canvasRect.yMin + BottomMargin);
+            float rowHeight = RowHeightFor(entries.Count, available);
+            if (rowHeight < MinRowHeight)
+            {
+                int fit = Mathf.Clamp(Mathf.FloorToInt((available - MinRowHeight * HeaderShare) / (MinRowHeight + RowSpacing)), 0, MaxCrampedRows);
+                if (fit <= 0)
+                {
+                    if (!loggedNoRoom)
+                    {
+                        loggedNoRoom = true;
+                        BoomerangFoo.Logger.LogInfo("Match stats: no room under the score bars, not showing the table.");
+                    }
+                    return;
+                }
+                entries = entries.OrderByDescending(entry => entry.kills).Take(fit).ToList();
+                rowHeight = RowHeightFor(entries.Count, available);
+            }
+            rowHeight = Mathf.Min(rowHeight, MaxRowHeight);
+            float headerHeight = rowHeight * HeaderShare;
+
+            tableRoot.anchoredPosition = new Vector2(0f, top);
+            tableRoot.sizeDelta = new Vector2(width, headerHeight + entries.Count * (rowHeight + RowSpacing));
+
+            // Column x positions, as fractions of the width
+            float totalWeight = BadgeWeight + columns.Sum(column => column.weight);
+            float[] starts = new float[columns.Count];
+            float cursor = BadgeWeight / totalWeight;
+            for (int i = 0; i < columns.Count; i++)
+            {
+                starts[i] = cursor;
+                cursor += columns[i].weight / totalWeight;
+            }
+
+            for (int i = 0; i < columns.Count; i++)
+            {
+                RectTransform cell = Cell(tableRoot, "Header", starts[i], columns[i].weight / totalWeight, 0f, headerHeight);
+                CreateText(cell, font, Term(columns[i].term, columns[i].fallback), headerHeight * 0.6f);
+            }
+
+            float y = headerHeight;
+            foreach (Entry entry in entries)
+            {
+                RectTransform rowRect = Cell(tableRoot, $"Row{entry.row}", 0f, 1f, y, rowHeight);
+                StyleRow(rowRect, entry.scoreRow, rowHeight);
+
+                RectTransform badgeCell = Cell(rowRect, "Badge", 0f, BadgeWeight / totalWeight, 0f, rowHeight);
+                CreateBadge(badgeCell, font, entry, rowHeight);
+
+                for (int i = 0; i < columns.Count; i++)
+                {
+                    RectTransform cell = Cell(rowRect, columns[i].stat.ToString(), starts[i], columns[i].weight / totalWeight, 0f, rowHeight);
+                    switch (columns[i].stat)
+                    {
+                        case Stat.Nemesis: CreateWho(cell, font, menu, gameManager, entry.nemesis, rowHeight); break;
+                        case Stat.Victim: CreateWho(cell, font, menu, gameManager, entry.victim, rowHeight); break;
+                        default: CreateText(cell, font, Value(entry, columns[i].stat), rowHeight * 0.55f); break;
+                    }
+                }
+                y += rowHeight + RowSpacing;
+            }
+        }
+
+        private static float RowHeightFor(int rows, float available)
+        {
+            return (available - RowSpacing * rows) / (rows + HeaderShare);
+        }
+
+        private static List<Entry> BuildEntries(UIMenuRoundEnd menu, GameManager gameManager, bool teamMatch)
+        {
+            List<Entry> entries = [];
             for (int row = 0; row < menu.uiScoreRows.Length; row++)
             {
                 UIScoreRow scoreRow = menu.uiScoreRows[row];
-                if (scoreRow == null) continue;
+                if (scoreRow == null || !scoreRow.gameObject.activeInHierarchy) continue;
+                var stats = gameManager.players.Where(player => gameManager.GetRowID(player) == row).Select(player => MatchStats.Get(player.playerID)).ToList();
+                if (stats.Count == 0) continue;
 
-                TextMeshProUGUI label = GetOrCreateLabel(scoreRow, font);
-                List<Player> rowPlayers = gameManager.players.Where(player => gameManager.GetRowID(player) == row).ToList();
-                if (!enabled || !scoreRow.gameObject.activeInHierarchy || rowPlayers.Count == 0)
+                entries.Add(new Entry
                 {
-                    label.gameObject.SetActive(false);
-                    continue;
-                }
-
-                label.gameObject.SetActive(true);
-                label.text = teamMatch ? TeamText(rowPlayers) : PlayerText(rowPlayers[0], gameManager);
-                PlaceLabel(scoreRow, label);
+                    row = row,
+                    scoreRow = scoreRow,
+                    kills = stats.Sum(s => s.Kills),
+                    deaths = stats.Sum(s => s.Deaths),
+                    self = stats.Sum(s => s.SelfEliminations),
+                    clean = stats.Sum(s => s.CleanRounds),
+                    nemesis = teamMatch ? null : stats[0].Nemesis,
+                    victim = teamMatch ? null : stats[0].FavoriteVictim,
+                });
             }
+            return entries;
         }
 
-        // A label without a font has no material, and TextMeshPro throws when styling it
-        private static TMP_FontAsset FindFont(UIMenuRoundEnd menu)
+        private static string Value(Entry entry, Stat stat)
         {
-            TextMeshProUGUI source = menu.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(text => text.name != LabelName && text.font != null)
-                ?? UnityEngine.Object.FindObjectsOfType<TextMeshProUGUI>().FirstOrDefault(text => text.name != LabelName && text.font != null);
-            if (source != null) return source.font;
-            return Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault();
-        }
-
-        private static TextMeshProUGUI GetOrCreateLabel(UIScoreRow scoreRow, TMP_FontAsset font)
-        {
-            Transform existing = scoreRow.transform.Find(LabelName);
-            if (existing != null)
+            switch (stat)
             {
-                TextMeshProUGUI existingLabel = existing.GetComponent<TextMeshProUGUI>();
-                if (existingLabel.font == null) existingLabel.font = font;
-                return existingLabel;
+                case Stat.Kills: return entry.kills.ToString();
+                case Stat.Deaths: return entry.deaths.ToString();
+                case Stat.KillDeath:
+                    float ratio = entry.deaths == 0 ? entry.kills : (float)entry.kills / entry.deaths;
+                    return ratio.ToString("0.##", CultureInfo.InvariantCulture);
+                case Stat.Self: return entry.self.ToString();
+                case Stat.Clean: return entry.clean.ToString();
+                default: return "";
+            }
+        }
+
+        // A horizontal slice of the parent: x and width as fractions, y down from the parent's top in canvas units
+        private static RectTransform Cell(RectTransform parent, string name, float xStart, float xWidth, float yFromTop, float height)
+        {
+            var cellObject = new GameObject(name, typeof(RectTransform));
+            var rect = (RectTransform)cellObject.transform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = new Vector2(xStart, 1f);
+            rect.anchorMax = new Vector2(xStart + xWidth, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -yFromTop);
+            rect.sizeDelta = new Vector2(0f, height);
+            return rect;
+        }
+
+        // Same rounded bar and colour as the player's score bar
+        private static void StyleRow(RectTransform rowRect, UIScoreRow scoreRow, float rowHeight)
+        {
+            Image bar = scoreRow.GetComponentsInChildren<Image>()
+                .Where(image => image.sprite != null && image.color.a > 0.2f)
+                .OrderByDescending(image => image.rectTransform.rect.width * image.rectTransform.rect.height)
+                .FirstOrDefault();
+
+            var background = rowRect.gameObject.AddComponent<Image>();
+            background.raycastTarget = false;
+            if (bar == null)
+            {
+                background.color = new Color(0f, 0f, 0f, 0.5f);
+                return;
+            }
+            background.sprite = bar.sprite;
+            background.color = bar.color;
+            Vector4 border = bar.sprite.border;
+            background.type = border != Vector4.zero && border.y + border.w <= rowHeight ? Image.Type.Sliced : Image.Type.Simple;
+        }
+
+        // The row's own P1 / BOT badge from the score screen
+        private static void CreateBadge(RectTransform cell, TMP_FontAsset font, Entry entry, float rowHeight)
+        {
+            UIPlayerIcon icon = entry.scoreRow.playerIcon;
+            if (icon != null)
+            {
+                try
+                {
+                    GameObject badge = UnityEngine.Object.Instantiate(icon.gameObject, cell, false);
+                    badge.SetActive(true);
+                    var rect = (RectTransform)badge.transform;
+                    rect.anchorMin = new Vector2(0.5f, 0.5f);
+                    rect.anchorMax = new Vector2(0.5f, 0.5f);
+                    rect.pivot = new Vector2(0.5f, 0.5f);
+                    rect.anchoredPosition = Vector2.zero;
+                    rect.localScale = Vector3.one;
+                    rect.sizeDelta = new Vector2(rowHeight * 0.85f, rowHeight * 0.85f);
+                    return;
+                }
+                catch (Exception e)
+                {
+                    BoomerangFoo.Logger.LogWarning($"Match stats: could not copy the player badge, using text. {e.Message}");
+                }
+            }
+            CreateText(cell, font, $"P{entry.row + 1}", rowHeight * 0.55f);
+        }
+
+        // Character face of the other player plus "x2"
+        private static void CreateWho(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, GameManager gameManager, (int playerId, int count)? who, float rowHeight)
+        {
+            if (who == null)
+            {
+                CreateText(cell, font, "-", rowHeight * 0.55f);
+                return;
             }
 
-            var labelObject = new GameObject(LabelName, typeof(RectTransform));
-            labelObject.transform.SetParent(scoreRow.transform, false);
-            labelObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            int playerId = who.Value.playerId;
+            Player other = gameManager.players.FirstOrDefault(player => player.playerID == playerId);
+            Sprite face = null;
+            if (other != null)
+            {
+                int otherRow = gameManager.GetRowID(other);
+                if (otherRow >= 0 && otherRow < menu.uiScoreRows.Length && menu.uiScoreRows[otherRow]?.characterIconSprite != null)
+                {
+                    face = menu.uiScoreRows[otherRow].characterIconSprite.sprite;
+                }
+            }
+
+            string count = $"x{who.Value.count}";
+            if (face == null)
+            {
+                CreateText(cell, font, $"P{playerId + 1} {count}", rowHeight * 0.55f);
+                return;
+            }
+
+            float size = rowHeight * 0.8f;
+            var faceObject = new GameObject("Face", typeof(RectTransform));
+            var faceRect = (RectTransform)faceObject.transform;
+            faceRect.SetParent(cell, false);
+            faceRect.anchorMin = new Vector2(0.5f, 0.5f);
+            faceRect.anchorMax = new Vector2(0.5f, 0.5f);
+            faceRect.pivot = new Vector2(1f, 0.5f);
+            faceRect.anchoredPosition = new Vector2(-2f, 0f);
+            faceRect.sizeDelta = new Vector2(size, size);
+            var image = faceObject.AddComponent<Image>();
+            image.sprite = face;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+
+            var countObject = new GameObject("Count", typeof(RectTransform));
+            var countRect = (RectTransform)countObject.transform;
+            countRect.SetParent(cell, false);
+            countRect.anchorMin = new Vector2(0.5f, 0f);
+            countRect.anchorMax = new Vector2(1f, 1f);
+            countRect.offsetMin = new Vector2(2f, 0f);
+            countRect.offsetMax = Vector2.zero;
+            TextMeshProUGUI label = CreateText(countRect, font, count, rowHeight * 0.55f);
+            if (label != null) label.alignment = TextAlignmentOptions.MidlineLeft;
+        }
+
+        private static TextMeshProUGUI CreateText(RectTransform rect, TMP_FontAsset font, string text, float maxSize)
+        {
+            var labelObject = new GameObject("Text", typeof(RectTransform));
+            var labelRect = (RectTransform)labelObject.transform;
+            labelRect.SetParent(rect, false);
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = Vector2.zero;
 
             var label = labelObject.AddComponent<TextMeshProUGUI>();
+            // Font before any styling: a label without one has no material and TextMeshPro throws
             label.font = font;
-            label.richText = true;
+            label.text = text;
+            label.color = Color.white;
             label.raycastTarget = false;
             label.enableWordWrapping = false;
             label.enableAutoSizing = true;
             label.fontSizeMin = 8f;
-            label.fontSizeMax = 28f;
-            label.alignment = TextAlignmentOptions.MidlineLeft;
-            label.color = Color.white;
+            label.fontSizeMax = maxSize;
+            label.alignment = TextAlignmentOptions.Center;
             if (label.fontSharedMaterial != null)
             {
-                label.outlineWidth = 0.25f;
-                label.outlineColor = new Color32(0, 0, 0, 255);
+                label.outlineWidth = 0.2f;
+                label.outlineColor = new Color32(40, 40, 40, 255);
             }
             return label;
         }
 
-        // Puts the label just right of the row's visible content, sized to the space left before the screen edge
-        private static void PlaceLabel(UIScoreRow scoreRow, TextMeshProUGUI label)
+        private static TMP_FontAsset FindFont(UIMenuRoundEnd menu)
         {
-            RectTransform rowRect = (RectTransform)scoreRow.transform;
-
-            float rightEdge = float.MinValue;
-            foreach (Graphic graphic in scoreRow.GetComponentsInChildren<Graphic>())
-            {
-                if (graphic.transform == label.transform) continue;
-                graphic.rectTransform.GetWorldCorners(corners);
-                rightEdge = Mathf.Max(rightEdge, rowRect.InverseTransformPoint(corners[2]).x);
-            }
-            if (rightEdge == float.MinValue)
-            {
-                rightEdge = rowRect.rect.xMax;
-            }
-
-            float width = 400f;
-            Canvas canvas = scoreRow.GetComponentInParent<Canvas>();
-            if (canvas != null)
-            {
-                ((RectTransform)canvas.rootCanvas.transform).GetWorldCorners(corners);
-                float canvasRight = rowRect.InverseTransformPoint(corners[2]).x;
-                width = canvasRight - rightEdge - 2 * Margin;
-            }
-            width = Mathf.Max(width, MinWidth);
-
-            RectTransform labelRect = label.rectTransform;
-            labelRect.anchorMin = rowRect.pivot;
-            labelRect.anchorMax = rowRect.pivot;
-            labelRect.pivot = new Vector2(0f, 0.5f);
-            labelRect.anchoredPosition = new Vector2(rightEdge + Margin, rowRect.rect.center.y);
-            labelRect.sizeDelta = new Vector2(width, rowRect.rect.height);
-        }
-
-        private static string PlayerText(Player player, GameManager gameManager)
-        {
-            PlayerMatchStats stats = MatchStats.Get(player.playerID);
-            string line1 = $"{Term("MatchStatsKills", "K")} {stats.Kills}   {Term("MatchStatsDeaths", "D")} {stats.Deaths}   " +
-                $"{Term("MatchStatsKD", "K/D")} {stats.KillDeathRatio.ToString("0.00", CultureInfo.InvariantCulture)}   " +
-                $"{Term("MatchStatsSelf", "Self")} {stats.SelfEliminations}   {Term("MatchStatsClean", "Clean")} {stats.CleanRounds}";
-            string line2 = $"{Term("MatchStatsNemesis", "Nemesis")} {Who(stats.Nemesis, gameManager)}   " +
-                $"{Term("MatchStatsVictim", "Victim")} {Who(stats.FavoriteVictim, gameManager)}";
-            return $"{line1}\n{line2}";
-        }
-
-        private static string TeamText(List<Player> players)
-        {
-            var stats = players.Select(player => MatchStats.Get(player.playerID)).ToList();
-            int kills = stats.Sum(s => s.Kills);
-            int deaths = stats.Sum(s => s.Deaths);
-            float ratio = deaths == 0 ? kills : (float)kills / deaths;
-            return $"{Term("MatchStatsKills", "K")} {kills}   {Term("MatchStatsDeaths", "D")} {deaths}   " +
-                $"{Term("MatchStatsKD", "K/D")} {ratio.ToString("0.00", CultureInfo.InvariantCulture)}   " +
-                $"{Term("MatchStatsSelf", "Self")} {stats.Sum(s => s.SelfEliminations)}   {Term("MatchStatsClean", "Clean")} {stats.Sum(s => s.CleanRounds)}";
-        }
-
-        private static string Who((int playerId, int count)? entry, GameManager gameManager)
-        {
-            if (entry == null) return "-";
-
-            int playerId = entry.Value.playerId;
-            Player player = gameManager.players.FirstOrDefault(p => p.playerID == playerId);
-            Color color = player != null && player.character != null ? player.character.Color : Color.white;
-            return $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>P{playerId + 1}</color> x{entry.Value.count}";
+            TextMeshProUGUI source = menu.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(text => text.font != null)
+                ?? UnityEngine.Object.FindObjectsOfType<TextMeshProUGUI>().FirstOrDefault(text => text.font != null);
+            if (source != null) return source.font;
+            return Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault();
         }
 
         private static string Term(string term, string fallback)

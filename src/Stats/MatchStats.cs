@@ -48,6 +48,7 @@ namespace BoomerangFoo.Stats
             PatchGameManager.OnPreAddPlayerKill += AddPlayerKill;
             PatchPlayer.OnPostDieConfirmed += DieConfirmed;
             PatchUIMenuRoundEnd.OnPostInit += RoundEnd;
+            MatchStatsUI.Activate();
         }
 
         public static PlayerMatchStats Get(int playerId)

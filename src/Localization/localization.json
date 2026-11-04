@@ -762,19 +762,19 @@
   "ModifierMatchStatsOnHint": {
     "description": "Hint for match stats turned on.",
     "translations": {
-      "English": "Show kills, deaths, nemesis and more after each round"
+      "English": "Show a stats table under the score after each round"
     }
   },
   "MatchStatsKills": {
     "description": "Round end stats label for kills.",
     "translations": {
-      "English": "K"
+      "English": "KILLS"
     }
   },
   "MatchStatsDeaths": {
     "description": "Round end stats label for deaths.",
     "translations": {
-      "English": "D"
+      "English": "DEATHS"
     }
   },
   "MatchStatsKD": {
@@ -786,25 +786,25 @@
   "MatchStatsSelf": {
     "description": "Round end stats label for self-eliminations.",
     "translations": {
-      "English": "Self"
+      "English": "FELL / SELF"
     }
   },
   "MatchStatsClean": {
     "description": "Round end stats label for rounds survived without dying.",
     "translations": {
-      "English": "Clean"
+      "English": "ROUNDS SURVIVED"
     }
   },
   "MatchStatsNemesis": {
     "description": "Round end stats label for the player who killed you most.",
     "translations": {
-      "English": "Nemesis"
+      "English": "KILLED YOU MOST"
     }
   },
   "MatchStatsVictim": {
     "description": "Round end stats label for the player you killed most.",
     "translations": {
-      "English": "Victim"
+      "English": "YOU KILLED MOST"
     }
   },
   "GameModeRussianRouletteName": {
