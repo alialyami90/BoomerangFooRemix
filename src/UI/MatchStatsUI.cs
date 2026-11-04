@@ -22,9 +22,14 @@ namespace BoomerangFoo.UI
             bool enabled = GameMode.selected?.gameSettings?.ShowMatchStats ?? true;
             GameManager gameManager = Singleton<GameManager>.Instance;
             bool teamMatch = Singleton<SettingsManager>.Instance.teamMatch;
-            TextMeshProUGUI fontSource = menu.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(text => text.name != LabelName);
+            TMP_FontAsset font = FindFont(menu);
 
-            BoomerangFoo.Logger.LogInfo($"Match stats: round {gameManager.roundNumber}, {gameManager.players.Count} players, team match {teamMatch}, font source {(fontSource != null ? fontSource.name : "none")}");
+            BoomerangFoo.Logger.LogInfo($"Match stats: round {gameManager.roundNumber}, {gameManager.players.Count} players, team match {teamMatch}, font {(font != null ? font.name : "none")}");
+            if (font == null)
+            {
+                BoomerangFoo.Logger.LogWarning("Match stats: no TextMeshPro font found, not showing stats.");
+                return;
+            }
 
             // Make sure the rows have their final layout before measuring them
             Canvas.ForceUpdateCanvases();
@@ -34,7 +39,7 @@ namespace BoomerangFoo.UI
                 UIScoreRow scoreRow = menu.uiScoreRows[row];
                 if (scoreRow == null) continue;
 
-                TextMeshProUGUI label = GetOrCreateLabel(scoreRow, fontSource);
+                TextMeshProUGUI label = GetOrCreateLabel(scoreRow, font);
                 List<Player> rowPlayers = gameManager.players.Where(player => gameManager.GetRowID(player) == row).ToList();
                 if (!enabled || !scoreRow.gameObject.activeInHierarchy || rowPlayers.Count == 0)
                 {
@@ -48,12 +53,23 @@ namespace BoomerangFoo.UI
             }
         }
 
-        private static TextMeshProUGUI GetOrCreateLabel(UIScoreRow scoreRow, TextMeshProUGUI fontSource)
+        // A label without a font has no material, and TextMeshPro throws when styling it
+        private static TMP_FontAsset FindFont(UIMenuRoundEnd menu)
+        {
+            TextMeshProUGUI source = menu.GetComponentsInChildren<TextMeshProUGUI>(true).FirstOrDefault(text => text.name != LabelName && text.font != null)
+                ?? UnityEngine.Object.FindObjectsOfType<TextMeshProUGUI>().FirstOrDefault(text => text.name != LabelName && text.font != null);
+            if (source != null) return source.font;
+            return Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault();
+        }
+
+        private static TextMeshProUGUI GetOrCreateLabel(UIScoreRow scoreRow, TMP_FontAsset font)
         {
             Transform existing = scoreRow.transform.Find(LabelName);
             if (existing != null)
             {
-                return existing.GetComponent<TextMeshProUGUI>();
+                TextMeshProUGUI existingLabel = existing.GetComponent<TextMeshProUGUI>();
+                if (existingLabel.font == null) existingLabel.font = font;
+                return existingLabel;
             }
 
             var labelObject = new GameObject(LabelName, typeof(RectTransform));
@@ -61,10 +77,7 @@ namespace BoomerangFoo.UI
             labelObject.AddComponent<LayoutElement>().ignoreLayout = true;
 
             var label = labelObject.AddComponent<TextMeshProUGUI>();
-            if (fontSource != null)
-            {
-                label.font = fontSource.font;
-            }
+            label.font = font;
             label.richText = true;
             label.raycastTarget = false;
             label.enableWordWrapping = false;
@@ -73,8 +86,11 @@ namespace BoomerangFoo.UI
             label.fontSizeMax = 28f;
             label.alignment = TextAlignmentOptions.MidlineLeft;
             label.color = Color.white;
-            label.outlineWidth = 0.25f;
-            label.outlineColor = new Color32(0, 0, 0, 255);
+            if (label.fontSharedMaterial != null)
+            {
+                label.outlineWidth = 0.25f;
+                label.outlineColor = new Color32(0, 0, 0, 255);
+            }
             return label;
         }
 
