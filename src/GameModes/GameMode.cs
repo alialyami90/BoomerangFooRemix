@@ -334,6 +334,16 @@ namespace BoomerangFoo.GameModes
                     weightAttach = weightId;
                 }
             }
+            if (!Modifiers.settings.ContainsKey("powerupHud"))
+            {
+                // Registered after the start/pickup grids so it sits directly below Max Number
+                var powerupHud = Modifiers.CloneModifierSetting("powerupHud", "ModifierPowerupHud", "ui_label_warmuplevel", "maxPowerups");
+                powerupHud.SetSliderOptions(["ui_off", "ui_on"], 1, ["ModifierPowerupHudOffHint", "ModifierPowerupHudOnHint"]);
+                powerupHud.SetGameStartCallback((gameMode, sliderIndex) =>
+                {
+                    gameMode.gameSettings.ShowPowerupHud = (sliderIndex == 1);
+                });
+            }
             foreach (var powerup in CustomPowerup.Registered)
             {
                 powerup.GenerateUI();

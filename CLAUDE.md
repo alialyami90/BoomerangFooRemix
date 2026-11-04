@@ -65,6 +65,12 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `LevelManagerSelectRandomPowerPatch` (in `PatchLevelManager.cs`) prefixes `LevelManager.SelectRandomPower(Player)`. It filters `possiblePowerups` by side pool, weight > 0 and powerups not already owned, then makes a weighted pick. It returns to the original method when nothing is customized or no candidate is left. Its `Prepare()` skips the patch if the method is not found. The game's selection code isn't available to read, so any deck or exclusion rules inside the original are bypassed only while customizations are active.
 - `CommonFunctions.IsBot(player)` finds bots by reflection: it uses the first `PlayerType` field or property on `Player`, falling back to an `*AI*` component. Which method it used is logged once.
 
+### Powerup display (HUD)
+- `UI/PowerupHud.cs` shows each human player's current powerups during play: P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right. It runs on its own `ScreenSpaceOverlay` canvas (`BFooPowerupHud`, DontDestroyOnLoad, sortingOrder -1, scaled by height from 1080p) and never modifies game menus.
+- Icons are cached from the `UIPowerupToggle`s of the vanilla `powerupSelections` grid when the match-settings menu opens (`PatchUIMenuMatchSettings.OnPostInit`). The chosen sprite names are logged. Badges clone the `UIPlayerIcon` of a `UIMenuRoundEnd` score row and call `SetPlayer`. Either one falls back to TextMeshPro text.
+- It refreshes on `PatchGameManager.OnPostUpdate` while `gameState == Playing`, rebuilding a panel only when that player's `activePowerup` changes. Any exception logs once and turns the display off. The `powerupHud` On/Off setting (below Max Number) maps to `GameSettings.ShowPowerupHud`.
+- Lesson from a removed feature: a TextMeshPro label created at runtime needs its `font` set before `outlineWidth` is touched, or it throws. An exception inside a postfix on a game UI method aborts the game's own flow (it left the round-end screen stuck), so wrap hook invocations that run inside game UI code.
+
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:
 - the lobby bot slider and cloned `UILobbyPlayer`s (`PatchUIMenuLobby`)

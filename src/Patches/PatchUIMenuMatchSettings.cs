@@ -18,6 +18,20 @@ namespace BoomerangFoo.Patches
         public static event Action<GameMode.Slot> OnMatchTypeSelected;
         public static void InvokeMatchTypeSelected(GameMode.Slot matchSlot) { OnMatchTypeSelected?.Invoke(matchSlot); }
 
+        public static event Action<UIMenuMatchSettings> OnPostInit;
+        public static void InvokePostInit(UIMenuMatchSettings menu)
+        {
+            // Never let a subscriber break the game's own menu setup
+            try
+            {
+                OnPostInit?.Invoke(menu);
+            }
+            catch (Exception e)
+            {
+                BoomerangFoo.Logger.LogError($"Match settings hook failed: {e}");
+            }
+        }
+
     }
 
 
@@ -211,6 +225,8 @@ namespace BoomerangFoo.Patches
                     gamemode.RegisterSettings();
                 }
             }
+
+            PatchUIMenuMatchSettings.InvokePostInit(__instance);
         }
     }
 

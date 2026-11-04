@@ -770,5 +770,23 @@
     "translations": {
       "English": "Everyone gets %s% random powerups each round"
     }
+  },
+  "ModifierPowerupHud": {
+    "description": "Modifier to show human players' current powerups in the screen corners.",
+    "translations": {
+      "English": "Powerup Display"
+    }
+  },
+  "ModifierPowerupHudOffHint": {
+    "description": "Hint for the powerup display turned off.",
+    "translations": {
+      "English": "Don't show powerups on screen"
+    }
+  },
+  "ModifierPowerupHudOnHint": {
+    "description": "Hint for the powerup display turned on.",
+    "translations": {
+      "English": "Show each human player's powerups in a screen corner"
+    }
   }
 }
