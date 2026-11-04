@@ -747,6 +747,66 @@
       "English": "%s%x as likely as normal"
     }
   },
+  "ModifierMatchStats": {
+    "description": "Modifier to show per-player match stats on the round end screen.",
+    "translations": {
+      "English": "Match Stats"
+    }
+  },
+  "ModifierMatchStatsOffHint": {
+    "description": "Hint for match stats turned off.",
+    "translations": {
+      "English": "Only show the score"
+    }
+  },
+  "ModifierMatchStatsOnHint": {
+    "description": "Hint for match stats turned on.",
+    "translations": {
+      "English": "Show kills, deaths, nemesis and more after each round"
+    }
+  },
+  "MatchStatsKills": {
+    "description": "Round end stats label for kills.",
+    "translations": {
+      "English": "K"
+    }
+  },
+  "MatchStatsDeaths": {
+    "description": "Round end stats label for deaths.",
+    "translations": {
+      "English": "D"
+    }
+  },
+  "MatchStatsKD": {
+    "description": "Round end stats label for kill/death ratio.",
+    "translations": {
+      "English": "K/D"
+    }
+  },
+  "MatchStatsSelf": {
+    "description": "Round end stats label for self-eliminations.",
+    "translations": {
+      "English": "Self"
+    }
+  },
+  "MatchStatsClean": {
+    "description": "Round end stats label for rounds survived without dying.",
+    "translations": {
+      "English": "Clean"
+    }
+  },
+  "MatchStatsNemesis": {
+    "description": "Round end stats label for the player who killed you most.",
+    "translations": {
+      "English": "Nemesis"
+    }
+  },
+  "MatchStatsVictim": {
+    "description": "Round end stats label for the player you killed most.",
+    "translations": {
+      "English": "Victim"
+    }
+  },
   "GameModeRussianRouletteName": {
     "description": "Name of Russian Roulette displayed on gamemode select.",
     "translations": {

@@ -5,6 +5,7 @@ using BoomerangFoo.Patches;
 using BoomerangFoo.Powerups;
 using BoomerangFoo.Settings;
 using BoomerangFoo.UI;
+using BoomerangFoo.Stats;
 using HarmonyLib;
 using TMPro;
 using UnityEngine;
@@ -37,6 +38,7 @@ public class BoomerangFoo : BaseUnityPlugin
         CustomPowerup.ActivateAll();
 
         PowerupHud.Activate();
+        MatchStats.Activate();
 
         GameMode.Register(new GameMode("Deathmatch", "ui_deathmatch", "ui_helper_deathmatch", SettingsManager.MatchType.DeathMatch, false, 0), GameMode.Slot.Deathmatch);
         GameMode.Register(new GameMode("TeamDeathmatch", "ui_teams", "ui_helper_teamup", SettingsManager.MatchType.DeathMatch, true, 1), GameMode.Slot.TeamUp);

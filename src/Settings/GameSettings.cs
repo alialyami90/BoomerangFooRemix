@@ -29,5 +29,6 @@ namespace BoomerangFoo.Settings
         public float GameSpeed = 1f;
 
         public bool ShowPowerupHud = true;
+        public bool ShowMatchStats = true;
     }
 }

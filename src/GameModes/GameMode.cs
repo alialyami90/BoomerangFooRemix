@@ -279,6 +279,16 @@ namespace BoomerangFoo.GameModes
                     gameMode.gameSettings.GameSpeed = (float)gameSpeedValues[sliderIndex] / 100;
                 });
             }
+            if (!Modifiers.settings.ContainsKey("matchStats"))
+            {
+                string attachTo = Modifiers.settings.ContainsKey("ui_label_suddendeath") ? "ui_label_suddendeath" : "gameSpeed";
+                var matchStats = Modifiers.CloneModifierSetting("matchStats", "ModifierMatchStats", "ui_label_warmuplevel", attachTo);
+                matchStats.SetSliderOptions(["ui_off", "ui_on"], 1, ["ModifierMatchStatsOffHint", "ModifierMatchStatsOnHint"]);
+                matchStats.SetGameStartCallback((gameMode, sliderIndex) =>
+                {
+                    gameMode.gameSettings.ShowMatchStats = (sliderIndex == 1);
+                });
+            }
             if (!Modifiers.settings.ContainsKey("humanStartPowers"))
             {
                 var humanStart = Modifiers.CloneModifierSetting("humanStartPowers", "ModifierHumanStartPowers", "powerupSelections", "maxPowerups");
