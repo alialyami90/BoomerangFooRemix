@@ -15,19 +15,22 @@ namespace BoomerangFoo.GameModes
         // The roulette replaces the global starting powers
         public override bool GivesStartingPowers => false;
 
-        // Pickups stack on top of the random powers instead of pushing out the oldest
+        // All random powers must fit, even when Random Powers is above Max Number
         public override int GetMaxPowerups(Player player)
         {
-            return Math.Max(gameSettings.MaxPowerups, SinglePowerups(Powerup.AllPowerups()).Count);
+            return Math.Max(gameSettings.MaxPowerups, RandomPowerupCount);
         }
 
         public override void Hook()
         {
+            // No pickups: the random powers are all you get each round
+            PatchLevelManager.BlockPowerupSpawn = true;
             PatchPlayer.OnPostSpawnIn += RollPowerups;
         }
 
         public override void Unhook()
         {
+            PatchLevelManager.BlockPowerupSpawn = false;
             PatchPlayer.OnPostSpawnIn -= RollPowerups;
         }
 

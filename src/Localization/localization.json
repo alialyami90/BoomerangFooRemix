@@ -756,7 +756,7 @@
   "GameModeRussianRouletteHint": {
     "description": "Hint for Russian Roulette displayed on gamemode select.",
     "translations": {
-      "English": "Random powers every round"
+      "English": "Random powers every round, no pickups"
     }
   },
   "GameModeRussianRouletteCount": {
