@@ -35,6 +35,7 @@ namespace BoomerangFoo.UI
         private static Canvas canvas;
         private static TMP_FontAsset font;
         private static UIPlayerIcon badgeTemplate;
+        private static bool loggedIcons = false;
         private static bool failed = false;
 
         public static void Activate()
@@ -43,36 +44,39 @@ namespace BoomerangFoo.UI
             PatchGameManager.OnPostUpdate += Update;
         }
 
-        // The Available powerups grid in the Modifiers menu holds the game's icon for every powerup
+        // The Available powerups grid in the Modifiers menu holds the game's icon for every powerup.
+        // Frames, backgrounds and checkmarks use the same sprite on every button, so a powerup's icon
+        // is the image whose sprite appears on that button only.
         private static void CacheIcons(UIMenuMatchSettings menu)
         {
             if (!Modifiers.settings.TryGetValue("powerupSelections", out ModifierSetting grid)) return;
 
-            var toggles = grid.gameObject.transform.GetChild(2).GetComponentsInChildren<UIPowerupToggle>(true);
-            foreach (UIPowerupToggle toggle in toggles)
+            var buttons = grid.gameObject.transform.GetChild(2).GetComponentsInChildren<UIPowerupToggle>(true)
+                .Where(toggle => toggle.powerupType != PowerupType.None)
+                .Select(toggle => (type: toggle.powerupType, images: toggle.GetComponentsInChildren<Image>(true).Where(image => image.sprite != null).ToList()))
+                .ToList();
+            Dictionary<Sprite, int> buttonsPerSprite = buttons
+                .SelectMany(button => button.images.Select(image => image.sprite).Distinct())
+                .GroupBy(sprite => sprite)
+                .ToDictionary(group => group.Key, group => group.Count());
+
+            icons.Clear();
+            List<string> report = [];
+            foreach (var (type, images) in buttons)
             {
-                if (toggle.powerupType == PowerupType.None || icons.ContainsKey(toggle.powerupType)) continue;
-
-                Image icon = FindIconImage(toggle);
-                if (icon != null)
+                Image icon = images.FirstOrDefault(image => buttonsPerSprite[image.sprite] == 1);
+                if (icon != null && !icons.ContainsKey(type))
                 {
-                    icons[toggle.powerupType] = icon.sprite;
+                    icons[type] = icon.sprite;
                 }
+                report.Add($"{type}: [{string.Join(", ", images.Select(image => $"{image.name}={image.sprite.name}{(image == icon ? " <icon>" : "")}"))}]");
             }
-            BoomerangFoo.Logger.LogInfo($"Powerup display: icons {string.Join(", ", icons.Select(kvp => $"{kvp.Key}={kvp.Value.name}"))}");
-        }
 
-        private static Image FindIconImage(UIPowerupToggle toggle)
-        {
-            // Skip the toggle's checkmark; prefer an image named like an icon, then anything but the background
-            Toggle unityToggle = toggle.GetComponent<Toggle>();
-            Graphic checkmark = unityToggle != null ? unityToggle.graphic : null;
-            Graphic background = unityToggle != null ? unityToggle.targetGraphic : null;
-            List<Image> images = toggle.GetComponentsInChildren<Image>(true).Where(image => image.sprite != null && image != checkmark).ToList();
-
-            return images.FirstOrDefault(image => image.name.IndexOf("icon", StringComparison.OrdinalIgnoreCase) >= 0)
-                ?? images.FirstOrDefault(image => image != background)
-                ?? images.FirstOrDefault();
+            if (!loggedIcons)
+            {
+                loggedIcons = true;
+                BoomerangFoo.Logger.LogInfo($"Powerup display: found icons for {icons.Count} of {buttons.Count} powerups. {string.Join(" ", report)}");
+            }
         }
 
         private static void Update(GameManager gameManager)
