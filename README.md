@@ -38,6 +38,7 @@ The simplest way to disable the mod is to remove `Bepinex/plugins/BoomerangFoo/B
 - Juggernaut: It's a 1 versus all battle, where the juggernaut has awesome powers. Take them down to become the new juggernaut.
 - Survive 'Till Dawn: There is one player with weapons and the rest must run away.
 - Team Golden: Join teams for Golden Boomerang. Your team must collectively hold onto the boomerang to score.
+- Russian Roulette: Every round, everyone's powerups are replaced with a set of random ones (3 by default). Pickups during the round stack on top.
 2. Custom game settings
 - Match length: Set any number of points to win.
 - Rapid powerup spawns: The powerup spawn rate can be boosted.

@@ -127,6 +127,12 @@ namespace BoomerangFoo.GameModes
             this.gameSettings = new GameSettings();
         }
 
+        // Whether the global Human/Bot Starting Powers are given in this mode
+        public virtual bool GivesStartingPowers => true;
+
+        // Powerup cap applied when a player is set up and each time they spawn
+        public virtual int GetMaxPowerups(Player player) => gameSettings.MaxPowerups;
+
         public virtual void Hook() { }
 
         public virtual void Unhook() { }

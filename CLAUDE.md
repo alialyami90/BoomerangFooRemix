@@ -42,8 +42,10 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 
 ### Game modes (`GameModes/GameMode.cs`)
 - `GameMode(id, nameTerm, hintTerm, SettingsManager.MatchType, teamMatch, slotTemplate)`. `slotTemplate` (0–3) chooses which vanilla icon to clone.
-- Registered in `BoomerangFoo.Awake` with `GameMode.Register(mode, GameMode.Slot.X)`. Slots 0–3 are the vanilla modes; `Extra1`–`Extra4` hold PowerDrain, RamboHulk (Juggernaut), SurviveTillDawn and TeamGolden. `Extra5` is free. Buttons for every slot are built in `UIMenuMatchSettingsInitPatch`. With more than 6 modes they are split into two rows; that code is marked "Still buggy".
+- Registered in `BoomerangFoo.Awake` with `GameMode.Register(mode, GameMode.Slot.X)`. Slots 0–3 are the vanilla modes; `Extra1`–`Extra5` hold PowerDrain, RamboHulk (Juggernaut), SurviveTillDawn, TeamGolden and RussianRoulette. All slots are now used. Buttons for every slot are built in `UIMenuMatchSettingsInitPatch`. With more than 6 modes they are split into two rows; that code is marked "Still buggy".
 - `GameMode.selected` is the active mode. `MatchSelected` unhooks the previous mode, hooks the new one, shows its settings rows and reloads saved settings.
+- Per-mode virtuals: `GivesStartingPowers` (whether the global Human/Bot Starting Powers apply) and `GetMaxPowerups(player)`, the powerup cap. `PatchPlayer.ApplyMaxPowerups` applies the cap in `Player.Init` and again at every `SpawnIn`, so a mode's cap never leaks into the next mode.
+- RussianRoulette: on every `OnPostSpawnIn` it clears the player's powerups and gives `RandomPowerupCount` distinct random ones (setting `gameMode.RussianRoulette.count`, 1–8, default 3) from `MatchSettings.availablePowerups`. Its cap is the number of powerup types, so pickups stack instead of pushing out the oldest.
 - Overrides: `Hook()`, `Unhook()`, `RegisterSettings()`. The base `RegisterSettings()` registers the global settings (bounciness, boomerang size, max powerups, spawn rate, sudden death, match length, no boomerangs, knockback, game speed, starting powers), then calls `GenerateUI()` on every powerup. Mode-specific settings use IDs prefixed `gameMode.<id>.`. `Modifiers.ShowSelectedGameMode` shows or hides rows based on that prefix.
 
 ### Settings UI (`UI/Modifiers.cs`)

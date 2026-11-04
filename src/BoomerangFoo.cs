@@ -48,6 +48,7 @@ public class BoomerangFoo : BaseUnityPlugin
         GameMode.Register(new RamboHulk(), GameMode.Slot.Extra2);
         GameMode.Register(new SurviveTillDawn(), GameMode.Slot.Extra3);
         GameMode.Register(new TeamGolden(), GameMode.Slot.Extra4);
+        GameMode.Register(new RussianRoulette(), GameMode.Slot.Extra5);
 
         PatchGameManager.OnPreStartMatch += (gameManager) =>
         {

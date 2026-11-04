@@ -806,5 +806,29 @@
     "translations": {
       "English": "Victim"
     }
+  },
+  "GameModeRussianRouletteName": {
+    "description": "Name of Russian Roulette displayed on gamemode select.",
+    "translations": {
+      "English": "Russian Roulette"
+    }
+  },
+  "GameModeRussianRouletteHint": {
+    "description": "Hint for Russian Roulette displayed on gamemode select.",
+    "translations": {
+      "English": "Random powers every round"
+    }
+  },
+  "GameModeRussianRouletteCount": {
+    "description": "Russian Roulette setting for how many random powerups each player gets per round.",
+    "translations": {
+      "English": "Random Powers"
+    }
+  },
+  "GameModeRussianRouletteCountHint": {
+    "description": "Russian Roulette hint for the number of random powerups.",
+    "translations": {
+      "English": "Everyone gets %s% random powerups each round"
+    }
   }
 }
