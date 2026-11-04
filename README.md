@@ -27,6 +27,16 @@ For convenience, I have provided an installation script `bfoo-linux-install-late
 *Details:* The installation script finds your Boomerang Fu installation, then downloads and extracts the mod. Then it configures Proton according to https://docs.bepinex.dev/articles/advanced/proton_wine.html.
 
 
+### One-click install from source (Windows)
+
+To get the newest changes without waiting for a release:
+
+1. Install the [.NET SDK](https://dotnet.microsoft.com/download) (version 8 or newer). You only need to do this once.
+2. Download [`Install-BoomerangFoo.bat`](https://github.com/alialyami90/BoomerangFooRemix/blob/claude/magical-carson-63p7ji/Install-BoomerangFoo.bat) (use the download button) and keep it anywhere, e.g. your Desktop.
+3. Double-click it whenever you want to install or update. It downloads the latest source, finds your Boomerang Fu folder through Steam, builds the mod and installs it. If the game is running, it asks before closing it.
+
+The first run takes a few minutes; later runs are faster. If something fails, the window shows why and the full log is saved to `%TEMP%\BoomerangFooRemix-install.log`.
+
 ## Disabling Mod
 
 The simplest way to disable the mod is to remove `Bepinex/plugins/BoomerangFoo/BoomerangFoo.dll`. Copy it to a different location and restore it when you want to enable the mod again.

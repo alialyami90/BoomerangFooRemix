@@ -88,7 +88,7 @@
 	    <Copy SourceFiles="@(MyOutputFiles)" DestinationFolder="$(PluginDir)" SkipUnchangedFiles="true" />
 	</Target>
 
-	<Target Name="BuildReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+	<Target Name="BuildReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' And '$(SkipReleaseZip)' != 'true'">
 		<PropertyGroup>
 			<ExportDir>$(ProjectDir)bin\export\</ExportDir>
 			<BoomerangFuDir>$(ExportDir)/BoomerangFu</BoomerangFuDir>

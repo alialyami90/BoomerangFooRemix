@@ -11,6 +11,14 @@ Guidance for working in this repository.
 - Project: `src/BoomerangFoo.csproj` (`netstandard2.1`, C# 12). Version is set by `<Version>` there and shown in the main menu as `MOD <version>`.
 - The build references the game's DLLs from `$(GamePath)\Boomerang Fu_Data\Managed\` (`Assembly-CSharp`, `Rewired_Core`, `FMODUnity`, TextMeshPro, etc.). `GamePath` defaults to the Windows Steam path. **It cannot be built without a local game install.** Those DLLs are not in the repo.
 - Post-build targets use PowerShell. They install BepInEx into the game folder if it's missing, then copy `BoomerangFoo.dll` and `Newtonsoft.Json.dll` to `BepInEx/plugins/BoomerangFoo`. A Release build also produces a zip in `src/bin/export/`.
+- One-click install: `Install-BoomerangFoo.bat` (repo root, CRLF) downloads `tools/install-mod.ps1` from the branch named in the .bat and runs it. The script (Windows PowerShell 5.1) does these steps in order:
+  1. Checks for `dotnet`.
+  2. Finds the game: a saved path (`%APPDATA%\BoomerangFooRemix\install-config.json`), then Steam's registry and `libraryfolders.vdf`, then a prompt.
+  3. Offers to close a running game.
+  4. Downloads the branch zip into `%TEMP%`.
+  5. Builds with `-c Release -p:SkipReleaseZip=true` (skips the export zip), so the project's copy step installs the DLLs.
+  6. Checks that the installed DLL was updated.
+  When work moves to another branch, update `BRANCH` in the .bat and the README link.
 - There are no automated tests. Changes have to be verified in-game. BepInEx logs go through `BoomerangFoo.Logger`.
 
 ## Layout
