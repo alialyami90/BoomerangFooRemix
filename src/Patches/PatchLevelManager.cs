@@ -97,29 +97,38 @@ namespace BoomerangFoo.Patches
     [HarmonyPatch]
     class LevelManagerSelectRandomPowerPatch
     {
+        // The exact parameter list isn't known (an exact (Player) lookup failed in-game),
+        // so take the overload that returns a powerup and whose first parameter accepts a Player
         static MethodBase TargetMethod()
         {
-            return AccessTools.Method(typeof(LevelManager), nameof(LevelManager.SelectRandomPower), [typeof(Player)]);
+            return AccessTools.GetDeclaredMethods(typeof(LevelManager)).FirstOrDefault(method =>
+                method.Name == nameof(LevelManager.SelectRandomPower)
+                && method.ReturnType == typeof(PowerupType)
+                && method.GetParameters().Length >= 1
+                && method.GetParameters()[0].ParameterType.IsAssignableFrom(typeof(Player)));
         }
 
         static bool Prepare()
         {
-            if (TargetMethod() == null)
+            MethodBase target = TargetMethod();
+            if (target == null)
             {
-                BoomerangFoo.Logger.LogWarning("LevelManager.SelectRandomPower(Player) not found. Pickup pools and spawn weights are disabled.");
+                BoomerangFoo.Logger.LogWarning("LevelManager.SelectRandomPower not found. Pickup pools and spawn weights are disabled.");
                 return false;
             }
+            string parameters = string.Join(", ", target.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
+            BoomerangFoo.Logger.LogInfo($"Patching LevelManager.SelectRandomPower({parameters}) for pickup pools and spawn weights");
             return true;
         }
 
         // Applies the human/bot pickup pools and per-powerup spawn weights.
         // Falls back to the original selection when nothing is customized or no candidate remains.
-        static bool Prefix(LevelManager __instance, Player __0, ref PowerupType __result)
+        static bool Prefix(LevelManager __instance, object __0, ref PowerupType __result)
         {
             GameSettings gameSettings = GameMode.selected?.gameSettings;
             if (gameSettings == null || __instance.possiblePowerups == null) return true;
 
-            Player player = __0;
+            Player player = __0 as Player;
             PowerupType pool = PowerupType.None;
             PowerupType owned = PowerupType.None;
             if (player != null)
