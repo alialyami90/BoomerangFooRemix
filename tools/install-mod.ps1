@@ -9,6 +9,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 downloads extremely slowly while drawing its progress bar
+$ProgressPreference = 'SilentlyContinue'
 $Repo = 'alialyami90/BoomerangFooRemix'
 $SteamAppId = '965680'
 $ConfigDir = Join-Path $env:APPDATA 'BoomerangFooRemix'
@@ -109,7 +111,7 @@ if (Test-Path -LiteralPath $WorkDir) { Remove-Item -LiteralPath $WorkDir -Recurs
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 $zip = Join-Path $WorkDir 'source.zip'
 try {
-    Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$Repo/archive/refs/heads/$Branch.zip" -OutFile $zip
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri "https://github.com/$Repo/archive/refs/heads/$Branch.zip" -OutFile $zip
 } catch {
     Fail "Could not download branch '$Branch' from github.com/$Repo. Check your internet connection and that the branch exists. ($($_.Exception.Message))"
 }
@@ -119,7 +121,7 @@ if (-not $project) { Fail 'The download did not contain src/BoomerangFoo.csproj.
 
 $version = ''
 try {
-    $commit = Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$Repo/commits/$Branch"
+    $commit = Invoke-RestMethod -UseBasicParsing -TimeoutSec 20 -Uri "https://api.github.com/repos/$Repo/commits/$Branch"
     $version = "$($commit.sha.Substring(0, 7)) - $(($commit.commit.message -split "`n")[0])"
     Write-Host "Latest change: $version"
 } catch {}

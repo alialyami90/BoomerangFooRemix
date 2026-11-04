@@ -8,10 +8,11 @@ set "BRANCH=claude/magical-carson-63p7ji"
 set "SCRIPT=%TEMP%\install-boomerangfoo.ps1"
 
 echo Downloading the latest installer...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/%REPO%/%BRANCH%/tools/install-mod.ps1' -OutFile '%SCRIPT%'"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri 'https://raw.githubusercontent.com/%REPO%/%BRANCH%/tools/install-mod.ps1' -OutFile '%SCRIPT%'"
 if errorlevel 1 (
     echo.
-    echo Could not download the installer. Check your internet connection.
+    echo Could not download the installer from raw.githubusercontent.com within 60 seconds.
+    echo Check your internet connection, or whether that site is blocked on your network.
     pause
     exit /b 1
 )
