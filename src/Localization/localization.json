@@ -860,5 +860,59 @@
     "translations": {
       "English": "PLAYERS"
     }
+  },
+  "MatchStatsTeamRed": {
+    "description": "Round end stats name for the team with the red score bar.",
+    "translations": {
+      "English": "TEAM RED"
+    }
+  },
+  "MatchStatsTeamOrange": {
+    "description": "Round end stats name for the team with the orange score bar.",
+    "translations": {
+      "English": "TEAM ORANGE"
+    }
+  },
+  "MatchStatsTeamYellow": {
+    "description": "Round end stats name for the team with the yellow score bar.",
+    "translations": {
+      "English": "TEAM YELLOW"
+    }
+  },
+  "MatchStatsTeamGreen": {
+    "description": "Round end stats name for the team with the green score bar.",
+    "translations": {
+      "English": "TEAM GREEN"
+    }
+  },
+  "MatchStatsTeamBlue": {
+    "description": "Round end stats name for the team with the blue score bar.",
+    "translations": {
+      "English": "TEAM BLUE"
+    }
+  },
+  "MatchStatsTeamPurple": {
+    "description": "Round end stats name for the team with the purple score bar.",
+    "translations": {
+      "English": "TEAM PURPLE"
+    }
+  },
+  "MatchStatsTeamPink": {
+    "description": "Round end stats name for the team with the pink score bar.",
+    "translations": {
+      "English": "TEAM PINK"
+    }
+  },
+  "MatchStatsTeamWhite": {
+    "description": "Round end stats name for the team with the white score bar.",
+    "translations": {
+      "English": "TEAM WHITE"
+    }
+  },
+  "MatchStatsTeamGrey": {
+    "description": "Round end stats name for the team with the grey score bar.",
+    "translations": {
+      "English": "TEAM GREY"
+    }
   }
 }
