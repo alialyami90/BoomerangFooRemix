@@ -22,7 +22,9 @@ namespace BoomerangFoo.UI
         private const float MaxRowHeight = 48f;
         private const float MinRowHeight = 24f;
         private const float HeaderShare = 0.75f;
-        private const int MaxCrampedRows = 6;
+        private const float SectionGap = 14f;
+        // Team rows show the first columns only: kills, deaths, K/D and fell / self
+        private const int TeamColumnCount = 4;
         // Keeps the table between SAVE REPLAY and CONTINUE
         private const float MaxWidthShare = 0.56f;
         private const float BadgeWeight = 0.09f;
@@ -42,10 +44,19 @@ namespace BoomerangFoo.UI
 
         private class Entry
         {
-            public int row;
-            public UIScoreRow scoreRow;
+            public Player player;          // set for human rows
+            public UIScoreRow scoreRow;    // set for team rows: the team's score bar
+            public Sprite barSprite;
+            public Color color;
             public int kills, deaths, self, clean;
             public (int playerId, int count)? nemesis, victim;
+        }
+
+        private class Section
+        {
+            public string term, fallback;
+            public List<Entry> entries;
+            public List<(Stat stat, string term, string fallback, float weight)> columns;
         }
 
         private static readonly Vector3[] corners = new Vector3[4];
@@ -180,38 +191,57 @@ namespace BoomerangFoo.UI
 
             GameManager gameManager = Singleton<GameManager>.Instance;
             bool teamMatch = Singleton<SettingsManager>.Instance.teamMatch;
-            var columns = Columns.Where(column => !teamMatch || (column.stat != Stat.Nemesis && column.stat != Stat.Victim)).ToList();
-            List<Entry> entries = BuildEntries(menu, gameManager, teamMatch);
-            if (entries.Count == 0) return;
+            List<UIScoreRow> activeRows = menu.uiScoreRows.Where(row => row != null && row.gameObject.activeInHierarchy).ToList();
 
-            // Fit the rows into the space under the score bars; when too cramped, show the top players by kills
+            // Teams mode: a table of teams, then the human players. Other modes: human players only.
+            List<Section> sections = [];
+            if (teamMatch)
+            {
+                List<Entry> teams = TeamEntries(gameManager, activeRows);
+                if (teams.Count > 0) sections.Add(new Section { term = "MatchStatsTeams", fallback = "TEAMS", entries = teams, columns = Columns.Take(TeamColumnCount).ToList() });
+            }
+            List<Entry> humans = HumanEntries(gameManager, activeRows);
+            if (humans.Count > 0) sections.Add(new Section { term = "MatchStatsPlayers", fallback = "PLAYERS", entries = humans, columns = Columns.ToList() });
+            if (sections.Count == 0) return;
+
+            // Fit everything into the space under the score bars; when cramped, keep the top players by kills
             var canvasRect = ((RectTransform)canvas.transform).rect;
             float width = Mathf.Min(bars.width, canvasRect.width * MaxWidthShare);
             float top = bars.yMin - Gap;
             float available = top - (canvasRect.yMin + BottomMargin);
-            float rowHeight = RowHeightFor(entries.Count, available);
+            float rowHeight = RowHeightFor(sections, available);
+            Section players = sections.LastOrDefault(section => section.term == "MatchStatsPlayers");
+            while (rowHeight < MinRowHeight && players != null && players.entries.Count > 1)
+            {
+                players.entries = players.entries.OrderByDescending(entry => entry.kills).Take(players.entries.Count - 1).ToList();
+                rowHeight = RowHeightFor(sections, available);
+            }
             if (rowHeight < MinRowHeight)
             {
-                int fit = Mathf.Clamp(Mathf.FloorToInt((available - MinRowHeight * HeaderShare) / (MinRowHeight + RowSpacing)), 0, MaxCrampedRows);
-                if (fit <= 0)
+                if (!loggedNoRoom)
                 {
-                    if (!loggedNoRoom)
-                    {
-                        loggedNoRoom = true;
-                        BoomerangFoo.Logger.LogInfo("Match stats: no room under the score bars, not showing the table.");
-                    }
-                    return;
+                    loggedNoRoom = true;
+                    BoomerangFoo.Logger.LogInfo("Match stats: no room under the score bars, not showing the table.");
                 }
-                entries = entries.OrderByDescending(entry => entry.kills).Take(fit).ToList();
-                rowHeight = RowHeightFor(entries.Count, available);
+                return;
             }
             rowHeight = Mathf.Min(rowHeight, MaxRowHeight);
             float headerHeight = rowHeight * HeaderShare;
 
+            float y = 0f;
+            foreach (Section section in sections)
+            {
+                if (y > 0f) y += SectionGap;
+                y = BuildSection(menu, gameManager, font, section, teamMatch, y, rowHeight, headerHeight);
+            }
             tableRoot.anchoredPosition = new Vector2(0f, top);
-            tableRoot.sizeDelta = new Vector2(width, headerHeight + entries.Count * (rowHeight + RowSpacing));
+            tableRoot.sizeDelta = new Vector2(width, y);
+        }
 
-            // Column x positions, as fractions of the width
+        // Header plus one bar per entry; returns the y below the section
+        private static float BuildSection(UIMenuRoundEnd menu, GameManager gameManager, TMP_FontAsset font, Section section, bool teamMatch, float y, float rowHeight, float headerHeight)
+        {
+            var columns = section.columns;
             float totalWeight = BadgeWeight + columns.Sum(column => column.weight);
             float[] starts = new float[columns.Count];
             float cursor = BadgeWeight / totalWeight;
@@ -221,63 +251,101 @@ namespace BoomerangFoo.UI
                 cursor += columns[i].weight / totalWeight;
             }
 
+            RectTransform titleCell = Cell(tableRoot, "Title", 0f, BadgeWeight / totalWeight, y, headerHeight);
+            TextMeshProUGUI title = CreateText(titleCell, font, Term(section.term, section.fallback), headerHeight * 0.6f);
+            if (title != null) title.alignment = TextAlignmentOptions.MidlineLeft;
             for (int i = 0; i < columns.Count; i++)
             {
-                RectTransform cell = Cell(tableRoot, "Header", starts[i], columns[i].weight / totalWeight, 0f, headerHeight);
+                RectTransform cell = Cell(tableRoot, "Header", starts[i], columns[i].weight / totalWeight, y, headerHeight);
                 CreateText(cell, font, Term(columns[i].term, columns[i].fallback), headerHeight * 0.6f);
             }
+            y += headerHeight;
 
-            float y = headerHeight;
-            foreach (Entry entry in entries)
+            foreach (Entry entry in section.entries)
             {
-                RectTransform rowRect = Cell(tableRoot, $"Row{entry.row}", 0f, 1f, y, rowHeight);
-                StyleRow(rowRect, entry.scoreRow, rowHeight);
+                RectTransform rowRect = Cell(tableRoot, "Row", 0f, 1f, y, rowHeight);
+                StyleRow(rowRect, entry, rowHeight);
 
                 RectTransform badgeCell = Cell(rowRect, "Badge", 0f, BadgeWeight / totalWeight, 0f, rowHeight);
-                CreateBadge(badgeCell, font, entry, rowHeight);
+                CreateBadge(badgeCell, font, menu, entry, rowHeight);
 
                 for (int i = 0; i < columns.Count; i++)
                 {
                     RectTransform cell = Cell(rowRect, columns[i].stat.ToString(), starts[i], columns[i].weight / totalWeight, 0f, rowHeight);
                     switch (columns[i].stat)
                     {
-                        case Stat.Nemesis: CreateWho(cell, font, menu, gameManager, entry.nemesis, rowHeight); break;
-                        case Stat.Victim: CreateWho(cell, font, menu, gameManager, entry.victim, rowHeight); break;
+                        case Stat.Nemesis: CreateWho(cell, font, menu, gameManager, entry.nemesis, teamMatch, rowHeight); break;
+                        case Stat.Victim: CreateWho(cell, font, menu, gameManager, entry.victim, teamMatch, rowHeight); break;
                         default: CreateText(cell, font, Value(entry, columns[i].stat), rowHeight * 0.55f); break;
                     }
                 }
                 y += rowHeight + RowSpacing;
             }
+            return y;
         }
 
-        private static float RowHeightFor(int rows, float available)
+        private static float RowHeightFor(List<Section> sections, float available)
         {
-            return (available - RowSpacing * rows) / (rows + HeaderShare);
+            int rows = sections.Sum(section => section.entries.Count);
+            float fixedSpace = RowSpacing * rows + SectionGap * (sections.Count - 1);
+            return (available - fixedSpace) / (rows + HeaderShare * sections.Count);
         }
 
-        private static List<Entry> BuildEntries(UIMenuRoundEnd menu, GameManager gameManager, bool teamMatch)
+        // One entry per team, in team order, matched to the visible score bars in the same order
+        private static List<Entry> TeamEntries(GameManager gameManager, List<UIScoreRow> activeRows)
         {
             List<Entry> entries = [];
-            for (int row = 0; row < menu.uiScoreRows.Length; row++)
+            var teams = gameManager.players.Where(player => player != null).GroupBy(player => player.team).OrderBy(team => team.Key).ToList();
+            for (int i = 0; i < teams.Count; i++)
             {
-                UIScoreRow scoreRow = menu.uiScoreRows[row];
-                if (scoreRow == null || !scoreRow.gameObject.activeInHierarchy) continue;
-                var stats = gameManager.players.Where(player => gameManager.GetRowID(player) == row).Select(player => MatchStats.Get(player.playerID)).ToList();
-                if (stats.Count == 0) continue;
-
-                entries.Add(new Entry
+                var stats = teams[i].Select(player => MatchStats.Get(player.playerID)).ToList();
+                UIScoreRow scoreRow = i < activeRows.Count ? activeRows[i] : null;
+                Entry entry = new Entry
                 {
-                    row = row,
                     scoreRow = scoreRow,
                     kills = stats.Sum(s => s.Kills),
                     deaths = stats.Sum(s => s.Deaths),
                     self = stats.Sum(s => s.SelfEliminations),
                     clean = stats.Sum(s => s.CleanRounds),
-                    nemesis = teamMatch ? null : stats[0].Nemesis,
-                    victim = teamMatch ? null : stats[0].FavoriteVictim,
-                });
+                };
+                ApplyBarStyle(entry, scoreRow, null);
+                entries.Add(entry);
             }
             return entries;
+        }
+
+        private static List<Entry> HumanEntries(GameManager gameManager, List<UIScoreRow> activeRows)
+        {
+            List<Entry> entries = [];
+            foreach (Player player in gameManager.players.Where(player => player != null && !CommonFunctions.IsBot(player)).OrderBy(player => player.playerID))
+            {
+                PlayerMatchStats stats = MatchStats.Get(player.playerID);
+                Entry entry = new Entry
+                {
+                    player = player,
+                    kills = stats.Kills,
+                    deaths = stats.Deaths,
+                    self = stats.SelfEliminations,
+                    clean = stats.CleanRounds,
+                    nemesis = stats.Nemesis,
+                    victim = stats.FavoriteVictim,
+                };
+                Color? color = player.character != null ? player.character.Color : (Color?)null;
+                ApplyBarStyle(entry, activeRows.FirstOrDefault(), color);
+                entries.Add(entry);
+            }
+            return entries;
+        }
+
+        // Same rounded bar as the score screen; the colour is the bar's own unless one is given
+        private static void ApplyBarStyle(Entry entry, UIScoreRow scoreRow, Color? color)
+        {
+            Image bar = scoreRow == null ? null : scoreRow.GetComponentsInChildren<Image>()
+                .Where(image => image.sprite != null && image.color.a > 0.2f)
+                .OrderByDescending(image => image.rectTransform.rect.width * image.rectTransform.rect.height)
+                .FirstOrDefault();
+            entry.barSprite = bar != null ? bar.sprite : null;
+            entry.color = color ?? (bar != null ? bar.color : new Color(0f, 0f, 0f, 0.5f));
         }
 
         private static string Value(Entry entry, Stat stat)
@@ -309,56 +377,73 @@ namespace BoomerangFoo.UI
             return rect;
         }
 
-        // Same rounded bar and colour as the player's score bar
-        private static void StyleRow(RectTransform rowRect, UIScoreRow scoreRow, float rowHeight)
+        private static void StyleRow(RectTransform rowRect, Entry entry, float rowHeight)
         {
-            Image bar = scoreRow.GetComponentsInChildren<Image>()
-                .Where(image => image.sprite != null && image.color.a > 0.2f)
-                .OrderByDescending(image => image.rectTransform.rect.width * image.rectTransform.rect.height)
-                .FirstOrDefault();
-
             var background = rowRect.gameObject.AddComponent<Image>();
             background.raycastTarget = false;
-            if (bar == null)
-            {
-                background.color = new Color(0f, 0f, 0f, 0.5f);
-                return;
-            }
-            background.sprite = bar.sprite;
-            background.color = bar.color;
-            Vector4 border = bar.sprite.border;
+            background.color = entry.color;
+            if (entry.barSprite == null) return;
+
+            background.sprite = entry.barSprite;
+            Vector4 border = entry.barSprite.border;
             background.type = border != Vector4.zero && border.y + border.w <= rowHeight ? Image.Type.Sliced : Image.Type.Simple;
         }
 
-        // The row's own P1 / BOT badge from the score screen
-        private static void CreateBadge(RectTransform cell, TMP_FontAsset font, Entry entry, float rowHeight)
+        // Human rows: the game's P1/P2 badge. Team rows: the team emblem from that team's score bar.
+        private static void CreateBadge(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, Entry entry, float rowHeight)
         {
-            UIPlayerIcon icon = entry.scoreRow.playerIcon;
-            if (icon != null)
+            float size = rowHeight * 0.85f;
+            try
             {
-                try
+                if (entry.player != null)
                 {
-                    GameObject badge = UnityEngine.Object.Instantiate(icon.gameObject, cell, false);
-                    badge.SetActive(true);
-                    var rect = (RectTransform)badge.transform;
-                    rect.anchorMin = new Vector2(0.5f, 0.5f);
-                    rect.anchorMax = new Vector2(0.5f, 0.5f);
-                    rect.pivot = new Vector2(0.5f, 0.5f);
-                    rect.anchoredPosition = Vector2.zero;
-                    rect.localScale = Vector3.one;
-                    rect.sizeDelta = new Vector2(rowHeight * 0.85f, rowHeight * 0.85f);
+                    UIPlayerIcon template = menu.uiScoreRows.Where(row => row != null && row.playerIcon != null).Select(row => row.playerIcon).FirstOrDefault();
+                    if (template != null)
+                    {
+                        GameObject badge = UnityEngine.Object.Instantiate(template.gameObject, cell, false);
+                        badge.SetActive(true);
+                        Center((RectTransform)badge.transform, size);
+                        badge.GetComponent<UIPlayerIcon>().SetPlayer(entry.player.playerID, PlayerType.Human);
+                        return;
+                    }
+                }
+                else if (entry.scoreRow != null && entry.scoreRow.characterIconSprite != null && entry.scoreRow.characterIconSprite.sprite != null)
+                {
+                    var emblem = new GameObject("Emblem", typeof(RectTransform));
+                    var rect = (RectTransform)emblem.transform;
+                    rect.SetParent(cell, false);
+                    Center(rect, size);
+                    var image = emblem.AddComponent<Image>();
+                    image.sprite = entry.scoreRow.characterIconSprite.sprite;
+                    image.preserveAspect = true;
+                    image.raycastTarget = false;
                     return;
                 }
-                catch (Exception e)
+            }
+            catch (Exception e)
+            {
+                BoomerangFoo.Logger.LogWarning($"Match stats: could not copy a badge, using text. {e.Message}");
+                foreach (Transform child in cell.Cast<Transform>().ToList())
                 {
-                    BoomerangFoo.Logger.LogWarning($"Match stats: could not copy the player badge, using text. {e.Message}");
+                    UnityEngine.Object.Destroy(child.gameObject);
                 }
             }
-            CreateText(cell, font, $"P{entry.row + 1}", rowHeight * 0.55f);
+            CreateText(cell, font, entry.player != null ? $"P{entry.player.playerID + 1}" : "", rowHeight * 0.55f);
         }
 
-        // Character face of the other player plus "x2"
-        private static void CreateWho(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, GameManager gameManager, (int playerId, int count)? who, float rowHeight)
+        private static void Center(RectTransform rect, float size)
+        {
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.localScale = Vector3.one;
+            rect.sizeDelta = new Vector2(size, size);
+        }
+
+        // The other player's character face plus "x2". Team score bars show emblems instead of faces,
+        // so in team matches (or without a face) it's the player's name in their colour.
+        private static void CreateWho(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, GameManager gameManager, (int playerId, int count)? who, bool teamMatch, float rowHeight)
         {
             if (who == null)
             {
@@ -367,21 +452,23 @@ namespace BoomerangFoo.UI
             }
 
             int playerId = who.Value.playerId;
-            Player other = gameManager.players.FirstOrDefault(player => player.playerID == playerId);
+            Player other = gameManager.players.FirstOrDefault(player => player != null && player.playerID == playerId);
+            string count = $"x{who.Value.count}";
             Sprite face = null;
-            if (other != null)
+            if (other != null && !teamMatch)
             {
                 int otherRow = gameManager.GetRowID(other);
-                if (otherRow >= 0 && otherRow < menu.uiScoreRows.Length && menu.uiScoreRows[otherRow]?.characterIconSprite != null)
+                if (otherRow >= 0 && otherRow < menu.uiScoreRows.Length && menu.uiScoreRows[otherRow] != null && menu.uiScoreRows[otherRow].characterIconSprite != null)
                 {
                     face = menu.uiScoreRows[otherRow].characterIconSprite.sprite;
                 }
             }
 
-            string count = $"x{who.Value.count}";
             if (face == null)
             {
-                CreateText(cell, font, $"P{playerId + 1} {count}", rowHeight * 0.55f);
+                string name = other != null && CommonFunctions.IsBot(other) ? "BOT" : $"P{playerId + 1}";
+                Color color = other != null && other.character != null ? other.character.Color : Color.white;
+                CreateText(cell, font, $"<color=#{ColorUtility.ToHtmlStringRGB(color)}>{name}</color> {count}", rowHeight * 0.55f);
                 return;
             }
 

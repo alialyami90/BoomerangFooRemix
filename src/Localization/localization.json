@@ -848,5 +848,17 @@
     "translations": {
       "English": "Show each human player's powerups in a screen corner"
     }
+  },
+  "MatchStatsTeams": {
+    "description": "Round end stats table title for the team totals.",
+    "translations": {
+      "English": "TEAMS"
+    }
+  },
+  "MatchStatsPlayers": {
+    "description": "Round end stats table title for the human players.",
+    "translations": {
+      "English": "PLAYERS"
+    }
   }
 }

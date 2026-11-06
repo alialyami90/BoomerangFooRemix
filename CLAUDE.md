@@ -86,7 +86,10 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `UI/MatchStatsUI.cs` draws a table under the score bars on its own overlay canvas (`BFooMatchStats`, sortingOrder 1000), so the score screen itself is never modified. Columns: KILLS, DEATHS, K/D, FELL / SELF, ROUNDS SURVIVED, KILLED YOU MOST, YOU KILLED MOST.
 - Its style is copied from the screen: each row uses the largest visible sprite of its `UIScoreRow` (the rounded bar, in the player's colour), a copy of the row's `UIPlayerIcon`, and the game's TextMeshPro font. "Who" cells show the other player's `characterIconSprite` face.
 - Placement comes from the score rows' on-screen bounds, re-checked every frame while the menu is open because the rows slide in. Width is at most 56% of the screen, centred, so it stays between SAVE REPLAY and CONTINUE. Rows shrink to fit; below 24 px it shows the top 6 by kills, and with no room at all it hides.
-- It hides when the `UIMenuRoundEnd` object is no longer active. Team matches show team totals without the two "who" columns. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
+- It hides when the `UIMenuRoundEnd` object is no longer active. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
+- Rows are **human players only** (a PLAYERS section, P1/P2 badges via a cloned `UIPlayerIcon` + `SetPlayer`, bar tinted with `character.Color`). In team matches a TEAMS section comes first: one row per team with KILLS, DEATHS, K/D and FELL / SELF, using that team's bar colour and emblem.
+- Teams are grouped by `player.team` (an int; this mod's modes use 1 and 2) and matched in order to the visible score rows. `GetRowID` must not be used for this, because for teams it returns the team number, which doesn't index `uiScoreRows`.
+- Team score rows show emblems instead of faces, so in team matches the "who" cells show a coloured name (P2 or BOT) instead of a face. When cramped, the PLAYERS section drops its lowest-kill rows first.
 
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:
