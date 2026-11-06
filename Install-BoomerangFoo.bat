@@ -4,7 +4,7 @@ rem Keep this file anywhere (e.g. your Desktop) and double-click it.
 rem It fetches the latest installer script and mod source from GitHub, builds the mod and installs it.
 setlocal
 set "REPO=alialyami90/BoomerangFooRemix"
-set "BRANCH=claude/magical-carson-63p7ji"
+set "BRANCH=master"
 set "SCRIPT=%TEMP%\install-boomerangfoo.ps1"
 
 echo Downloading the latest installer...
