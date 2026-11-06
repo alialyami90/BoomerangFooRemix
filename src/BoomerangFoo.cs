@@ -4,6 +4,8 @@ using BoomerangFoo.GameModes;
 using BoomerangFoo.Patches;
 using BoomerangFoo.Powerups;
 using BoomerangFoo.Settings;
+using BoomerangFoo.UI;
+using BoomerangFoo.Stats;
 using HarmonyLib;
 using TMPro;
 using UnityEngine;
@@ -35,6 +37,9 @@ public class BoomerangFoo : BaseUnityPlugin
         CustomPowerup.Registered.Add(ShieldPowerup.Instance);
         CustomPowerup.ActivateAll();
 
+        PowerupHud.Activate();
+        MatchStats.Activate();
+
         GameMode.Register(new GameMode("Deathmatch", "ui_deathmatch", "ui_helper_deathmatch", SettingsManager.MatchType.DeathMatch, false, 0), GameMode.Slot.Deathmatch);
         GameMode.Register(new GameMode("TeamDeathmatch", "ui_teams", "ui_helper_teamup", SettingsManager.MatchType.DeathMatch, true, 1), GameMode.Slot.TeamUp);
         GameMode.Register(new GameMode("HideAndSeek", "ui_hideandseek", "ui_helper_hideandseek", SettingsManager.MatchType.HideAndSeek, false, 2), GameMode.Slot.HideAndSeek);
@@ -45,6 +50,7 @@ public class BoomerangFoo : BaseUnityPlugin
         GameMode.Register(new RamboHulk(), GameMode.Slot.Extra2);
         GameMode.Register(new SurviveTillDawn(), GameMode.Slot.Extra3);
         GameMode.Register(new TeamGolden(), GameMode.Slot.Extra4);
+        GameMode.Register(new RussianRoulette(), GameMode.Slot.Extra5);
 
         PatchGameManager.OnPreStartMatch += (gameManager) =>
         {

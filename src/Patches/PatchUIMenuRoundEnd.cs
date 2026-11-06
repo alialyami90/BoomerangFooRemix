@@ -9,6 +9,20 @@ namespace BoomerangFoo.Patches
 {
     class PatchUIMenuRoundEnd
     {
+        public static event Action<UIMenuRoundEnd> OnPostInit;
+        public static void InvokePostInit(UIMenuRoundEnd menu)
+        {
+            // An exception here would abort the game's round-end flow and leave the screen stuck, so contain and log it
+            try
+            {
+                OnPostInit?.Invoke(menu);
+            }
+            catch (Exception e)
+            {
+                BoomerangFoo.Logger.LogError($"Round end hook failed: {e}");
+            }
+        }
+
         public static void EnsureMaxPlayers(UIMenuRoundEnd __instance)
         {
             int maxPlayers = ModSettings.Instance.MaxPlayers;
@@ -90,6 +104,8 @@ namespace BoomerangFoo.Patches
             {
                 vertLayout.spacing = 0f;
             }
+
+            PatchUIMenuRoundEnd.InvokePostInit(__instance);
         }
     }
 

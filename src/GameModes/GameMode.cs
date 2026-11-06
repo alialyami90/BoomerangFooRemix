@@ -127,6 +127,12 @@ namespace BoomerangFoo.GameModes
             this.gameSettings = new GameSettings();
         }
 
+        // Whether the global Human/Bot Starting Powers are given in this mode
+        public virtual bool GivesStartingPowers => true;
+
+        // Powerup cap applied when a player is set up and each time they spawn
+        public virtual int GetMaxPowerups(Player player) => gameSettings.MaxPowerups;
+
         public virtual void Hook() { }
 
         public virtual void Unhook() { }
@@ -273,6 +279,16 @@ namespace BoomerangFoo.GameModes
                     gameMode.gameSettings.GameSpeed = (float)gameSpeedValues[sliderIndex] / 100;
                 });
             }
+            if (!Modifiers.settings.ContainsKey("matchStats"))
+            {
+                string attachTo = Modifiers.settings.ContainsKey("ui_label_suddendeath") ? "ui_label_suddendeath" : "gameSpeed";
+                var matchStats = Modifiers.CloneModifierSetting("matchStats", "ModifierMatchStats", "ui_label_warmuplevel", attachTo);
+                matchStats.SetSliderOptions(["ui_off", "ui_on"], 1, ["ModifierMatchStatsOffHint", "ModifierMatchStatsOnHint"]);
+                matchStats.SetGameStartCallback((gameMode, sliderIndex) =>
+                {
+                    gameMode.gameSettings.ShowMatchStats = (sliderIndex == 1);
+                });
+            }
             if (!Modifiers.settings.ContainsKey("humanStartPowers"))
             {
                 var humanStart = Modifiers.CloneModifierSetting("humanStartPowers", "ModifierHumanStartPowers", "powerupSelections", "maxPowerups");
@@ -327,6 +343,16 @@ namespace BoomerangFoo.GameModes
                     });
                     weightAttach = weightId;
                 }
+            }
+            if (!Modifiers.settings.ContainsKey("powerupHud"))
+            {
+                // Registered after the start/pickup grids so it sits directly below Max Number
+                var powerupHud = Modifiers.CloneModifierSetting("powerupHud", "ModifierPowerupHud", "ui_label_warmuplevel", "maxPowerups");
+                powerupHud.SetSliderOptions(["ui_off", "ui_on"], 1, ["ModifierPowerupHudOffHint", "ModifierPowerupHudOnHint"]);
+                powerupHud.SetGameStartCallback((gameMode, sliderIndex) =>
+                {
+                    gameMode.gameSettings.ShowPowerupHud = (sliderIndex == 1);
+                });
             }
             foreach (var powerup in CustomPowerup.Registered)
             {

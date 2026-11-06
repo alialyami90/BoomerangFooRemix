@@ -61,3 +61,7 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+# Windows scripts must keep CRLF line endings, including in GitHub's zip downloads
+*.bat text eol=crlf
+*.ps1 text eol=crlf

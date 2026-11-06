@@ -40,6 +40,10 @@ namespace BoomerangFoo.Patches
         public static event Action<Player> OnPostDie;
         public static void InvokePostDie(Player player) { OnPostDie?.Invoke(player); }
 
+        // Only fires when the player actually went from alive to dead (not cancelled, e.g. by a decoy revive)
+        public static event Action<Player> OnPostDieConfirmed;
+        public static void InvokePostDieConfirmed(Player player) { OnPostDieConfirmed?.Invoke(player); }
+
         public static Func<Player, bool> PreStartFall;
 
         public static Predicate<Player> DoToggleGoldenDiscPFX;
@@ -54,6 +58,12 @@ namespace BoomerangFoo.Patches
 
         public static event Action<Player> OnPreStartFall;
         public static void InvokePreStartFall(Player player) { OnPreStartFall?.Invoke(player); }
+
+        private static readonly FieldInfo maxActivePowerups = typeof(Player).GetField("maxActivePowerups", BindingFlags.NonPublic | BindingFlags.Instance);
+        public static void ApplyMaxPowerups(Player player)
+        {
+            maxActivePowerups.SetValue(player, GameMode.selected.GetMaxPowerups(player));
+        }
     }
 
     [HarmonyPatch(typeof(Player), nameof(Player.GetReady))]
@@ -70,10 +80,11 @@ namespace BoomerangFoo.Patches
     {
         static void Postfix(Player __instance)
         {
+            PatchPlayer.ApplyMaxPowerups(__instance);
             PatchPlayer.InvokePostSpawnIn(__instance);
             var gameSettings = GameMode.selected.gameSettings;
             PowerupType startupPowers = CommonFunctions.IsBot(__instance) ? gameSettings.BotStartupPowerUps : gameSettings.HumanStartupPowerUps;
-            if (startupPowers != 0 && Singleton<GameManager>.Instance.roundNumber == 1)
+            if (GameMode.selected.GivesStartingPowers && startupPowers != 0 && Singleton<GameManager>.Instance.roundNumber == 1)
             {
                 CommonFunctions.GetEnumPowerUpValues(startupPowers).ForEach(delegate (PowerupType i)
                 {
@@ -96,13 +107,11 @@ namespace BoomerangFoo.Patches
     [HarmonyPatch(typeof(Player), "Init")]
     class PlayerInitPatch
     {
-        static readonly FieldInfo activePowerups = typeof(Player).GetField("maxActivePowerups", BindingFlags.NonPublic | BindingFlags.Instance);
-
         static void Prefix(Player __instance)
         {
             PatchPlayer.InvokePreInit(__instance);
             PowerupManager.powerupHistories[__instance.powerupHistory] = __instance;
-            activePowerups.SetValue(__instance, GameMode.selected.gameSettings.MaxPowerups);
+            PatchPlayer.ApplyMaxPowerups(__instance);
         }
     }
 
@@ -264,22 +273,29 @@ namespace BoomerangFoo.Patches
     {
         public static bool stopDie = false;
 
-        static bool Prefix(Player __instance)
+        static bool Prefix(Player __instance, out bool __state)
         {
+            // __state: the player was alive and the death was not cancelled
+            __state = __instance.actorState != Actor.ActorState.Dead;
             GameManagerAddPlayerKillPatch.killedPlayer = __instance;
             PatchPlayer.InvokePreDie(__instance);
 
             if (stopDie)
             {
                 stopDie = false;
+                __state = false;
                 return false;
             }
             return true;
         }
 
-        static void Postfix(Player __instance)
+        static void Postfix(Player __instance, bool __state)
         {
             PatchPlayer.InvokePostDie(__instance);
+            if (__state && __instance.actorState == Actor.ActorState.Dead)
+            {
+                PatchPlayer.InvokePostDieConfirmed(__instance);
+            }
         }
     }
 

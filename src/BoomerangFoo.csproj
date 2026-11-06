@@ -88,7 +88,7 @@
 	    <Copy SourceFiles="@(MyOutputFiles)" DestinationFolder="$(PluginDir)" SkipUnchangedFiles="true" />
 	</Target>
 
-	<Target Name="BuildReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+	<Target Name="BuildReleaseZip" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' And '$(SkipReleaseZip)' != 'true'">
 		<PropertyGroup>
 			<ExportDir>$(ProjectDir)bin\export\</ExportDir>
 			<BoomerangFuDir>$(ExportDir)/BoomerangFu</BoomerangFuDir>
@@ -106,7 +106,7 @@
 		<MakeDir Directories="$(PluginsDir)" />
 		<Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(PluginsDir)" />
 		<Copy SourceFiles="$(OutputPath)Newtonsoft.Json.dll" DestinationFolder="$(PluginsDir)" />
-		<Exec Command="powershell -Command &quot;if (Test-Path '$(ReleaseZip)') { Remove-Item '$(ReleaseZip)' } ; Compress-Archive -Path $(ExportDir)\BoomerangFu\* -DestinationPath $(ReleaseZip)&quot;" Condition=" '$(OS)' == 'Windows_NT' " />
+		<Exec Command="powershell -Command &quot;if (Test-Path '$(ReleaseZip)') { Remove-Item '$(ReleaseZip)' } ; Compress-Archive -Path '$(ExportDir)BoomerangFu\*' -DestinationPath '$(ReleaseZip)'&quot;" Condition=" '$(OS)' == 'Windows_NT' " />
 
 		<Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(ExportDir)" SkipUnchangedFiles="true" />
 	</Target>
