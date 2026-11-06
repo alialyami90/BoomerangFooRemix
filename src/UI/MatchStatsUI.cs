@@ -21,7 +21,8 @@ namespace BoomerangFoo.UI
         private const float RowSpacing = 6f;
         private const float MaxRowHeight = 48f;
         private const float MinRowHeight = 24f;
-        private const float HeaderShare = 0.75f;
+        // Headers get a full row so long column names can wrap onto two lines
+        private const float HeaderShare = 1f;
         private const float SectionGap = 14f;
         // Team rows show the first columns only: kills, deaths, K/D and fell / self
         private const int TeamColumnCount = 4;
@@ -45,6 +46,7 @@ namespace BoomerangFoo.UI
         private class Entry
         {
             public Player player;          // set for human rows
+            public string label;           // TEAM RED, P1, ...
             public UIScoreRow scoreRow;    // set for team rows: the team's score bar
             public Sprite barSprite;
             public Color color;
@@ -252,12 +254,12 @@ namespace BoomerangFoo.UI
             }
 
             RectTransform titleCell = Cell(tableRoot, "Title", 0f, BadgeWeight / totalWeight, y, headerHeight);
-            TextMeshProUGUI title = CreateText(titleCell, font, Term(section.term, section.fallback), headerHeight * 0.6f);
-            if (title != null) title.alignment = TextAlignmentOptions.MidlineLeft;
+            TextMeshProUGUI title = CreateHeaderText(titleCell, font, Term(section.term, section.fallback), headerHeight);
+            if (title != null) title.alignment = TextAlignmentOptions.BottomLeft;
             for (int i = 0; i < columns.Count; i++)
             {
                 RectTransform cell = Cell(tableRoot, "Header", starts[i], columns[i].weight / totalWeight, y, headerHeight);
-                CreateText(cell, font, Term(columns[i].term, columns[i].fallback), headerHeight * 0.6f);
+                CreateHeaderText(cell, font, Term(columns[i].term, columns[i].fallback), headerHeight);
             }
             y += headerHeight;
 
@@ -267,7 +269,7 @@ namespace BoomerangFoo.UI
                 StyleRow(rowRect, entry, rowHeight);
 
                 RectTransform badgeCell = Cell(rowRect, "Badge", 0f, BadgeWeight / totalWeight, 0f, rowHeight);
-                CreateBadge(badgeCell, font, menu, entry, rowHeight);
+                CreateBadge(badgeCell, font, entry, rowHeight);
 
                 for (int i = 0; i < columns.Count; i++)
                 {
@@ -309,6 +311,7 @@ namespace BoomerangFoo.UI
                     clean = stats.Sum(s => s.CleanRounds),
                 };
                 ApplyBarStyle(entry, scoreRow, null);
+                entry.label = TeamName(entry.color, i + 1);
                 entries.Add(entry);
             }
             return entries;
@@ -332,6 +335,7 @@ namespace BoomerangFoo.UI
                 };
                 Color? color = player.character != null ? player.character.Color : (Color?)null;
                 ApplyBarStyle(entry, activeRows.FirstOrDefault(), color);
+                entry.label = $"P{player.playerID + 1}";
                 entries.Add(entry);
             }
             return entries;
@@ -389,56 +393,47 @@ namespace BoomerangFoo.UI
             background.type = border != Vector4.zero && border.y + border.w <= rowHeight ? Image.Type.Sliced : Image.Type.Simple;
         }
 
-        // Human rows: the game's P1/P2 badge. Team rows: the team emblem from that team's score bar.
-        private static void CreateBadge(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, Entry entry, float rowHeight)
+        // The row's name (P1, TEAM RED) on a darker pill of the row's own bar, like the game's badges.
+        // The game's own badge and the team row's portrait can't be reused: in team matches the badge is hidden
+        // and the portrait is a character, not the team.
+        private static void CreateBadge(RectTransform cell, TMP_FontAsset font, Entry entry, float rowHeight)
         {
-            float size = rowHeight * 0.85f;
-            try
+            var pillObject = new GameObject("Pill", typeof(RectTransform));
+            var pill = (RectTransform)pillObject.transform;
+            pill.SetParent(cell, false);
+            pill.anchorMin = Vector2.zero;
+            pill.anchorMax = Vector2.one;
+            pill.offsetMin = new Vector2(6f, rowHeight * 0.12f);
+            pill.offsetMax = new Vector2(-6f, -rowHeight * 0.12f);
+
+            var image = pillObject.AddComponent<Image>();
+            image.raycastTarget = false;
+            image.color = Color.Lerp(entry.color, Color.black, 0.3f);
+            if (entry.barSprite != null)
             {
-                if (entry.player != null)
-                {
-                    UIPlayerIcon template = menu.uiScoreRows.Where(row => row != null && row.playerIcon != null).Select(row => row.playerIcon).FirstOrDefault();
-                    if (template != null)
-                    {
-                        GameObject badge = UnityEngine.Object.Instantiate(template.gameObject, cell, false);
-                        badge.SetActive(true);
-                        Center((RectTransform)badge.transform, size);
-                        badge.GetComponent<UIPlayerIcon>().SetPlayer(entry.player.playerID, PlayerType.Human);
-                        return;
-                    }
-                }
-                else if (entry.scoreRow != null && entry.scoreRow.characterIconSprite != null && entry.scoreRow.characterIconSprite.sprite != null)
-                {
-                    var emblem = new GameObject("Emblem", typeof(RectTransform));
-                    var rect = (RectTransform)emblem.transform;
-                    rect.SetParent(cell, false);
-                    Center(rect, size);
-                    var image = emblem.AddComponent<Image>();
-                    image.sprite = entry.scoreRow.characterIconSprite.sprite;
-                    image.preserveAspect = true;
-                    image.raycastTarget = false;
-                    return;
-                }
+                image.sprite = entry.barSprite;
+                Vector4 border = entry.barSprite.border;
+                image.type = border != Vector4.zero && border.y + border.w <= rowHeight * 0.76f ? Image.Type.Sliced : Image.Type.Simple;
             }
-            catch (Exception e)
-            {
-                BoomerangFoo.Logger.LogWarning($"Match stats: could not copy a badge, using text. {e.Message}");
-                foreach (Transform child in cell.Cast<Transform>().ToList())
-                {
-                    UnityEngine.Object.Destroy(child.gameObject);
-                }
-            }
-            CreateText(cell, font, entry.player != null ? $"P{entry.player.playerID + 1}" : "", rowHeight * 0.55f);
+
+            CreateText(pill, font, entry.label ?? "", rowHeight * 0.5f);
         }
 
-        private static void Center(RectTransform rect, float size)
+        // Teams are named after their bar colour
+        private static string TeamName(Color color, int number)
         {
-            rect.anchorMin = new Vector2(0.5f, 0.5f);
-            rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.localScale = Vector3.one;
-            rect.sizeDelta = new Vector2(size, size);
+            Color.RGBToHSV(color, out float hue, out float saturation, out float value);
+            string colorName;
+            float degrees = hue * 360f;
+            if (saturation < 0.2f) colorName = value > 0.5f ? "White" : "Grey";
+            else if (degrees < 15f || degrees >= 345f) colorName = "Red";
+            else if (degrees < 45f) colorName = "Orange";
+            else if (degrees < 70f) colorName = "Yellow";
+            else if (degrees < 170f) colorName = "Green";
+            else if (degrees < 260f) colorName = "Blue";
+            else if (degrees < 290f) colorName = "Purple";
+            else colorName = "Pink";
+            return Term($"MatchStatsTeam{colorName}", $"TEAM {colorName.ToUpperInvariant()}");
         }
 
         // The other player's character face plus "x2". Team score bars show emblems instead of faces,
@@ -495,6 +490,20 @@ namespace BoomerangFoo.UI
             countRect.offsetMax = Vector2.zero;
             TextMeshProUGUI label = CreateText(countRect, font, count, rowHeight * 0.55f);
             if (label != null) label.alignment = TextAlignmentOptions.MidlineLeft;
+        }
+
+        // Column headers share one size and wrap onto two lines instead of shrinking into each other
+        private static TextMeshProUGUI CreateHeaderText(RectTransform cell, TMP_FontAsset font, string text, float headerHeight)
+        {
+            TextMeshProUGUI label = CreateText(cell, font, text, headerHeight * 0.38f);
+            if (label == null) return null;
+            label.enableAutoSizing = false;
+            label.fontSize = headerHeight * 0.38f;
+            label.enableWordWrapping = true;
+            label.alignment = TextAlignmentOptions.Bottom;
+            label.rectTransform.offsetMin = new Vector2(4f, 2f);
+            label.rectTransform.offsetMax = new Vector2(-4f, 0f);
+            return label;
         }
 
         private static TextMeshProUGUI CreateText(RectTransform rect, TMP_FontAsset font, string text, float maxSize)
