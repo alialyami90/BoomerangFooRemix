@@ -29,6 +29,8 @@ namespace BoomerangFoo.UI
         // Keeps the table between SAVE REPLAY and CONTINUE
         private const float MaxWidthShare = 0.56f;
         private const float BadgeWeight = 0.09f;
+        // On the winners screen the table starts this far up from the bottom of the screen
+        private const float WinnersTableTop = 0.45f;
 
         private enum Stat { Kills, Deaths, KillDeath, Self, Clean, Nemesis, Victim }
 
@@ -64,7 +66,11 @@ namespace BoomerangFoo.UI
         private static readonly Vector3[] corners = new Vector3[4];
         private static Canvas canvas;
         private static RectTransform tableRoot;
-        private static UIMenuRoundEnd currentMenu;
+        // The menu the table belongs to (score screen or winners screen); it hides when that menu closes
+        private static UIMenuBase currentMenu;
+        // Score screen the rows' colours and bar shape come from; still used on the winners screen
+        private static UIMenuRoundEnd scoreMenu;
+        private static bool onWinnersScreen = false;
         private static Rect lastBars;
         private static bool loggedNoRoom = false;
 
@@ -75,7 +81,23 @@ namespace BoomerangFoo.UI
 
         public static void Show(UIMenuRoundEnd menu)
         {
+            scoreMenu = menu;
             currentMenu = menu;
+            onWinnersScreen = false;
+            Layout(force: true);
+        }
+
+        // The winners screen has no score bars, so the table sits in the lower part of the screen
+        public static void ShowOnWinnersScreen(UIMenuBase menu)
+        {
+            if (scoreMenu == null)
+            {
+                scoreMenu = Resources.FindObjectsOfTypeAll<UIMenuRoundEnd>().FirstOrDefault(roundEnd => roundEnd.gameObject.scene.IsValid());
+            }
+            if (scoreMenu == null) return;
+
+            currentMenu = menu;
+            onWinnersScreen = true;
             Layout(force: true);
         }
 
@@ -114,7 +136,7 @@ namespace BoomerangFoo.UI
             }
 
             EnsureCanvas();
-            Rect? bars = BarsRect(currentMenu);
+            Rect? bars = onWinnersScreen ? WinnersScreenAnchor() : BarsRect(scoreMenu);
             if (bars == null)
             {
                 Hide();
@@ -124,7 +146,7 @@ namespace BoomerangFoo.UI
 
             lastBars = bars.Value;
             canvas.gameObject.SetActive(true);
-            Build(currentMenu, bars.Value);
+            Build(scoreMenu, bars.Value);
         }
 
         private static void EnsureCanvas()
@@ -148,6 +170,15 @@ namespace BoomerangFoo.UI
             tableRoot.anchorMin = new Vector2(0.5f, 0.5f);
             tableRoot.anchorMax = new Vector2(0.5f, 0.5f);
             tableRoot.pivot = new Vector2(0.5f, 1f);
+        }
+
+        // A zero-height strip whose bottom is where the table's top should be
+        private static Rect WinnersScreenAnchor()
+        {
+            Rect canvasRect = ((RectTransform)canvas.transform).rect;
+            float width = canvasRect.width * MaxWidthShare;
+            float top = canvasRect.yMin + canvasRect.height * WinnersTableTop + Gap;
+            return Rect.MinMaxRect(-width / 2f, top, width / 2f, top);
         }
 
         // Bounds of the visible score rows in this canvas's units (origin at the screen centre)
@@ -193,7 +224,7 @@ namespace BoomerangFoo.UI
 
             GameManager gameManager = Singleton<GameManager>.Instance;
             bool teamMatch = Singleton<SettingsManager>.Instance.teamMatch;
-            List<UIScoreRow> activeRows = menu.uiScoreRows.Where(row => row != null && row.gameObject.activeInHierarchy).ToList();
+            List<UIScoreRow> activeRows = menu.uiScoreRows.Where(row => row != null && row.gameObject.activeSelf).ToList();
 
             // Teams mode: a table of teams, then the human players. Other modes: human players only.
             List<Section> sections = [];
@@ -436,8 +467,9 @@ namespace BoomerangFoo.UI
             return Term($"MatchStatsTeam{colorName}", $"TEAM {colorName.ToUpperInvariant()}");
         }
 
-        // The other player's character face plus "x2". Team score bars show emblems instead of faces,
-        // so in team matches (or without a face) it's the player's name in their colour.
+        // The other player's character face plus "x2". In free-for-all the face comes from their score bar; team score
+        // bars don't show players, so otherwise it's their portrait from the character select grid, or failing that
+        // their name in their colour.
         private static void CreateWho(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, GameManager gameManager, (int playerId, int count)? who, bool teamMatch, float rowHeight)
         {
             if (who == null)
@@ -457,6 +489,11 @@ namespace BoomerangFoo.UI
                 {
                     face = menu.uiScoreRows[otherRow].characterIconSprite.sprite;
                 }
+            }
+
+            if (face == null && other != null)
+            {
+                face = CharacterFaces.Get(other);
             }
 
             if (face == null)

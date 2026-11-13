@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using HarmonyLib;
 using BoomerangFoo.GameModes;
 using System.Collections;
@@ -19,6 +20,9 @@ namespace BoomerangFoo.Patches
 
         public static event Action<GameManager> OnPreStartMatch;
         public static void InvokePreStartMatch(GameManager gameManager) { OnPreStartMatch?.Invoke(gameManager); }
+
+        public static event Action<GameManager> OnPreEndMatch;
+        public static void InvokePreEndMatch(GameManager gameManager) { OnPreEndMatch?.Invoke(gameManager); }
 
         public static event Action<GameManager> OnPreStartRoundSequence;
         public static void InvokePreStartRoundSequence(GameManager gameManager) { OnPreStartRoundSequence?.Invoke(gameManager); }
@@ -67,6 +71,25 @@ namespace BoomerangFoo.Patches
         static void Prefix(GameManager __instance)
         {
             PatchGameManager.InvokePreStartMatch(__instance);
+        }
+    }
+
+    [HarmonyPatch]
+    class GameManagerEndMatchPatch
+    {
+        // Looked up rather than named in the attribute: a missing method would stop every patch from loading
+        static MethodBase TargetMethod() => AccessTools.Method(typeof(GameManager), "EndMatch");
+
+        static bool Prepare()
+        {
+            if (TargetMethod() != null) return true;
+            BoomerangFoo.Logger.LogWarning("GameManager.EndMatch not found. Stats on the winners screen are disabled.");
+            return false;
+        }
+
+        static void Prefix(GameManager __instance)
+        {
+            PatchGameManager.InvokePreEndMatch(__instance);
         }
     }
 
