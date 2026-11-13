@@ -116,7 +116,7 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - level `maxPlayers` (`LevelManagerBuildMatchPlaylistPatch`)
 - duplicated spawn points (`PatchLevel`)
 - spawn separation (`Spawning/SpawnSeparation.cs`, on `OnPreStartRoundSequence`, after `PrepareRound` has placed everyone and before `SpawnPlayer`). `PrepareRound` gives free-for-all player k `playerSpawnPoints[k]`; teams use a fixed 6-slot order per team that the two teams share, and a team member past the 6th reuses the previous slot. So with 7+ players, any bot on a human's point, or a second human on one, moves to the spawn point furthest from all humans. Bots may share points with each other.
-- Known open issue: with 7+ players the winners screen (`UIMenuMatchEnd`) shows its title but never its award cards or REMATCH / BACK TO MENU buttons, which locks the game. It's probably another per-player list sized for 6; the diagnostics dump of `UIMenuMatchEnd` is there to find it.
+- winners screen award cards (`PatchUIMenuMatchEnd`): `UIMenuMatchEnd.Init` hides every card in `uiPlayers` (6), then the `ShowMatchAwards` coroutine indexes `uiPlayers[i]` for every player. With 7+ players it threw IndexOutOfRange, the cards and REMATCH / BACK TO MENU never appeared, and the game locked (Esc doesn't work on that screen). The Init prefix copies the last card up to the player count and scales the card row by `6 / players`. `matchEndPlayers` isn't used by the screen's code.
 
 ### Localization
 - `src/Localization/localization.json` maps `term → { description, contributions, translations: { English, ... } }`. Missing languages fall back to English.
