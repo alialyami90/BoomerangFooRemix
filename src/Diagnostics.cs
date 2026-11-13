@@ -36,6 +36,10 @@ namespace BoomerangFoo
                 }
                 DumpEnum(report, typeof(UIMenuBase).GetNestedType("MenuType"));
 
+                // The winners screen: its fields and every method, for the 7+ player lock-up
+                DumpFields(report, typeof(UIMenuMatchEnd));
+                DumpAllMethods(report, typeof(UIMenuMatchEnd));
+
                 string path = Path.Combine(BepInEx.Paths.BepInExRootPath, "BoomerangFoo-diagnostics.txt");
                 File.WriteAllText(path, report.ToString());
                 BoomerangFoo.Logger.LogInfo($"Wrote diagnostics to {path}");
@@ -58,6 +62,34 @@ namespace BoomerangFoo
             foreach (CodeInstruction instruction in PatchProcessor.GetOriginalInstructions(moveNext))
             {
                 report.AppendLine($"{index++,5}: {instruction}");
+            }
+        }
+
+        // IL of every method declared on the type, plus the MoveNext of its coroutines
+        private static void DumpAllMethods(StringBuilder report, Type type)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+            var methods = type.GetMethods(flags).Cast<MethodBase>()
+                .Concat(type.GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Public)
+                    .Select(nested => nested.GetMethod("MoveNext", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
+                    .Where(moveNext => moveNext != null));
+            foreach (MethodBase method in methods)
+            {
+                if (method.IsAbstract || method.GetMethodBody() == null) continue;
+                report.AppendLine();
+                report.AppendLine($"== IL {method.DeclaringType.Name}.{method.Name}");
+                try
+                {
+                    int index = 0;
+                    foreach (CodeInstruction instruction in PatchProcessor.GetOriginalInstructions(method))
+                    {
+                        report.AppendLine($"{index++,5}: {instruction}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    report.AppendLine($"  (could not read: {e.Message})");
+                }
             }
         }
 

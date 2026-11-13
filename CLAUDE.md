@@ -20,7 +20,7 @@ Guidance for working in this repository.
   6. Checks that the installed DLL was updated.
   When work moves to another branch, update `BRANCH` in the .bat and the README link.
 - There are no automated tests. Changes have to be verified in-game. BepInEx logs go through `BoomerangFoo.Logger`.
-- `Diagnostics.Write()` (called after `PatchAll`) writes `BepInEx/BoomerangFoo-diagnostics.txt`. It contains the IL of `GameManager`'s `PrepareRound`, `SpawnPlayer`, `StartRoundSequence` and `EndMatch` coroutines, plus the fields (and enum values) of `Player`, `GameManager`, its character and input types, `UICharacterGridCell`, `UILobbyPlayer`, `UIScoreRow`, `UIMenuRoundEnd`, `UIManager`, and `UIMenuBase.MenuType`. The game's code isn't otherwise readable, so ask for this file when a fix depends on game internals.
+- `Diagnostics.Write()` (called after `PatchAll`) writes `BepInEx/BoomerangFoo-diagnostics.txt`. It contains the IL of `GameManager`'s `PrepareRound`, `SpawnPlayer`, `StartRoundSequence` and `EndMatch` coroutines, plus the fields (and enum values) of `Player`, `GameManager`, its character and input types, `UICharacterGridCell`, `UILobbyPlayer`, `UIScoreRow`, `UIMenuRoundEnd`, `UIManager`, and `UIMenuBase.MenuType`, and the fields and IL of every `UIMenuMatchEnd` method and coroutine. The game's code isn't otherwise readable, so ask for this file when a fix depends on game internals.
 - Patches on game methods that might not exist are written as `[HarmonyPatch]` + `TargetMethod()` + `Prepare()` that returns false (with a warning) when the method is missing. A missing target named in a `[HarmonyPatch(typeof(X), "Name")]` attribute throws inside `PatchAll` and stops every patch from loading.
 
 ## Layout
@@ -115,6 +115,8 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - `GameManager` also has `char0colours`…`char5colours` (`Color[]`), which may matter for other 7+ player issues
 - level `maxPlayers` (`LevelManagerBuildMatchPlaylistPatch`)
 - duplicated spawn points (`PatchLevel`)
+- spawn separation (`Spawning/SpawnSeparation.cs`, on `OnPreStartRoundSequence`, after `PrepareRound` has placed everyone and before `SpawnPlayer`). `PrepareRound` gives free-for-all player k `playerSpawnPoints[k]`; teams use a fixed 6-slot order per team that the two teams share, and a team member past the 6th reuses the previous slot. So with 7+ players, any bot on a human's point, or a second human on one, moves to the spawn point furthest from all humans. Bots may share points with each other.
+- Known open issue: with 7+ players the winners screen (`UIMenuMatchEnd`) shows its title but never its award cards or REMATCH / BACK TO MENU buttons, which locks the game. It's probably another per-player list sized for 6; the diagnostics dump of `UIMenuMatchEnd` is there to find it.
 
 ### Localization
 - `src/Localization/localization.json` maps `term → { description, contributions, translations: { English, ... } }`. Missing languages fall back to English.
