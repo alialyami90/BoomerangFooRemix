@@ -5,6 +5,7 @@ using BoomerangFoo.GameModes;
 using BoomerangFoo.Patches;
 using BoomerangFoo.Powerups;
 using BoomerangFoo.Settings;
+using BoomerangFoo.Spawning;
 using BoomerangFoo.UI;
 using BoomerangFoo.Stats;
 using HarmonyLib;
@@ -41,6 +42,7 @@ public class BoomerangFoo : BaseUnityPlugin
 
         PowerupHud.Activate();
         PowerupDiscard.Activate();
+        SpawnSeparation.Activate();
         MatchStats.Activate();
 
         GameMode.Register(new GameMode("Deathmatch", "ui_deathmatch", "ui_helper_deathmatch", SettingsManager.MatchType.DeathMatch, false, 0), GameMode.Slot.Deathmatch);

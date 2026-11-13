@@ -20,7 +20,7 @@ Guidance for working in this repository.
   6. Checks that the installed DLL was updated.
   When work moves to another branch, update `BRANCH` in the .bat and the README link.
 - There are no automated tests. Changes have to be verified in-game. BepInEx logs go through `BoomerangFoo.Logger`.
-- `Diagnostics.Write()` (called after `PatchAll`) writes `BepInEx/BoomerangFoo-diagnostics.txt`. It contains the IL of `GameManager`'s `PrepareRound`, `SpawnPlayer`, `StartRoundSequence` and `EndMatch` coroutines, plus the fields (and enum values) of `Player`, `GameManager`, its character and input types, `UICharacterGridCell`, `UILobbyPlayer`, `UIScoreRow`, `UIMenuRoundEnd`, `UIManager`, and `UIMenuBase.MenuType`. The game's code isn't otherwise readable, so ask for this file when a fix depends on game internals.
+- `Diagnostics.Write()` (called after `PatchAll`) writes `BepInEx/BoomerangFoo-diagnostics.txt`. It contains the IL of `GameManager`'s `PrepareRound`, `SpawnPlayer`, `StartRoundSequence` and `EndMatch` coroutines, plus the fields (and enum values) of `Player`, `GameManager`, its character and input types, `UICharacterGridCell`, `UILobbyPlayer`, `UIScoreRow`, `UIMenuRoundEnd`, `UIManager`, and `UIMenuBase.MenuType`, and the fields and IL of every `UIMenuMatchEnd` method and coroutine. The game's code isn't otherwise readable, so ask for this file when a fix depends on game internals.
 - Patches on game methods that might not exist are written as `[HarmonyPatch]` + `TargetMethod()` + `Prepare()` that returns false (with a warning) when the method is missing. A missing target named in a `[HarmonyPatch(typeof(X), "Name")]` attribute throws inside `PatchAll` and stops every patch from loading.
 
 ## Layout
@@ -87,8 +87,8 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - Clean rounds are counted once per `roundNumber` when the round-end screen opens (`PatchUIMenuRoundEnd.OnPostInit`).
 - `UI/MatchStatsUI.cs` draws a table under the score bars on its own overlay canvas (`BFooMatchStats`, sortingOrder 1000), so the score screen itself is never modified. Columns: KILLS, DEATHS, K/D, FELL / SELF, ROUNDS SURVIVED, KILLED YOU MOST, YOU KILLED MOST.
 - Its style is copied from the screen: each row uses the largest visible sprite of a `UIScoreRow` (the rounded bar) and the game's TextMeshPro font. The left cell is a darker pill of that bar with the row's name: P1, P2… for players, and TEAM RED / TEAM BLUE for teams (named from the bar colour's hue). The game's `UIPlayerIcon` isn't reused because it is hidden in team matches, and a team row's `characterIconSprite` is a character portrait, not the team emblem. Column headers use one fixed size and wrap onto two lines. "Who" cells show the other player's `characterIconSprite` face (free-for-all only).
-- Placement comes from the score rows' on-screen bounds, re-checked every frame while the menu is open because the rows slide in. Width is at most 56% of the screen, centred, so it stays between SAVE REPLAY and CONTINUE. Rows shrink to fit; below 24 px it shows the top 6 by kills, and with no room at all it hides.
-- It hides when the `UIMenuRoundEnd` object is no longer active. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
+- Placement comes from the score rows' on-screen bounds, re-checked every frame while the menu is open because the rows slide in. Width is a fixed 56% of the screen, centred, so it stays between SAVE REPLAY and CONTINUE. It must not follow the score bars' width, which shrinks in short matches and squished the table. Rows shrink to fit; below 24 px it shows the top 6 by kills, and with no room at all it hides.
+- It hides when the `UIMenuRoundEnd` object is no longer active. R2 on the score screen fades the score out to show the replay: each frame the table copies the alpha of `UIMenuRoundEnd.canvasGroup` (and hides if its `content` canvas is off) into its own `CanvasGroup`, so it fades with the scoreboard. The `matchStats` On/Off setting maps to `GameSettings.ShowMatchStats`.
 - Rows are **human players only** (a PLAYERS section, bar tinted with `character.Color`). In team matches a TEAMS section comes first: one row per team with KILLS, DEATHS, K/D and FELL / SELF, using that team's bar colour.
 - Teams are grouped by `player.team` (an int; this mod's modes use 1 and 2) and matched in order to the visible score rows. `GetRowID` must not be used for this, because for teams it returns the team number, which doesn't index `uiScoreRows`.
 - Team score rows show emblems instead of faces, so in team matches the "who" cells show a coloured name (P2 or BOT) instead of a face. When cramped, the PLAYERS section drops its lowest-kill rows first.
@@ -99,19 +99,24 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - The player's `Rewired.Player` is found by reflection: a field on `Player`, then on `Player.playerInput`, then `ReInput.players.GetPlayer(playerID)`. Which one was used is logged once.
 
 ### Character faces
-- `UI/CharacterFaces.Get(player)` returns a player's portrait from the lobby's `UICharacterGridCell`s. The player's character is the first field whose enum contains `Eggplant`, looked up on `Player`, then on `player.character`. A cell's portrait is its image whose sprite no other character's cell uses. The mapping is logged once.
-- Match stats "who" cells use the free-for-all score-row face first, then this, then a coloured name.
+- `UI/CharacterFaces.Get(player)` returns `player.character.scoresSpriteIdle`, the face the score screen uses, read by reflection; `lobbySpriteIdle` is the fallback. It works for humans and bots in every mode.
+- Match stats "who" cells use it first, then the free-for-all score-row face, then a coloured name.
+- `Character` also has `characterType` (enum `CharacterType`: Eggplant, Avocado, …), `lobbySpriteHappy` and `colorTeamOne`/`colorTeamTwo`. `UIMenuRoundEnd` has `teamOneFlag`/`teamTwoFlag`, the team emblems.
 
 ### Match stats on the winners screen
-- `GameManager.EndMatch` (prefix, `PatchGameManager.OnPreEndMatch`) sets a flag. The next menu pushed through `UIManager.PushMenu` (`PatchUIManager.OnPostPushMenu`) that isn't `UIMenuRoundEnd` gets the stats table (`MatchStatsUI.ShowOnWinnersScreen`), anchored at 45% of the screen height and hidden when that menu closes. Row colours still come from the last `UIMenuRoundEnd`, whose rows are picked by `activeSelf`. Each menu type shown is logged once.
+- The winners screen is `UIMenuMatchEnd`. When `UIManager.PushMenu` (`PatchUIManager.OnPostPushMenu`) shows it, `MatchStatsUI.ShowOnWinnersScreen` draws the stats table there and hides it when that menu closes. `GameManager.EndMatch` is not a usable signal: it doesn't run in a normal match.
+- On that screen the table's top sits at 28% of the screen height, just under the award cards, at 50% width. If that would run under REMATCH / BACK TO MENU (`rematchButton`, `quitButton`, `wishlistButton`, right half of the screen only), it ends just left of them instead, never narrower than 60% of its width. The buttons' bounds are logged once. Row colours still come from the last `UIMenuRoundEnd`, whose rows are picked by `activeSelf`. Each menu type shown is logged once; the menus seen are UIMenuSplash, UIMenuMain, UIMenuLobby, UIMenuMatchSettings, UIMenuInstructions, UIMenuRoundTitles, UIMenuRoundEnd and UIMenuMatchEnd.
 
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:
 - the lobby bot slider and cloned `UILobbyPlayer`s (`PatchUIMenuLobby`)
 - score rows (`PatchUIMenuRoundEnd`)
-- hint, alert and powerup bars plus character colors (`GameManagerSetupPatch`)
+- hint, alert and powerup bars plus character colors (`GameManagerSetupPatch`), and `healthBars` / `decoyHealthBars` by reflection (`ExtendBars`). `PrepareRound` indexes `healthBars[i]` per player; at 6 entries it threw IndexOutOfRange for player 7, so later players never got their bars and `SpawnPlayer` hit a null `alertBar`, freezing the round start.
+- `GameManager` also has `char0colours`…`char5colours` (`Color[]`), which may matter for other 7+ player issues
 - level `maxPlayers` (`LevelManagerBuildMatchPlaylistPatch`)
 - duplicated spawn points (`PatchLevel`)
+- spawn separation (`Spawning/SpawnSeparation.cs`, on `OnPreStartRoundSequence`, after `PrepareRound` has placed everyone and before `SpawnPlayer`). `PrepareRound` gives free-for-all player k `playerSpawnPoints[k]`; teams use a fixed 6-slot order per team that the two teams share, and a team member past the 6th reuses the previous slot. So with 7+ players, any bot on a human's point, or a second human on one, moves to the spawn point furthest from all humans. Bots may share points with each other.
+- winners screen award cards (`PatchUIMenuMatchEnd`): `UIMenuMatchEnd.Init` hides every card in `uiPlayers` (6), then the `ShowMatchAwards` coroutine indexes `uiPlayers[i]` for every player. With 7+ players it threw IndexOutOfRange, the cards and REMATCH / BACK TO MENU never appeared, and the game locked (Esc doesn't work on that screen). The Init prefix copies the last card up to the player count and scales the card row by `6 / players`. `matchEndPlayers` isn't used by the screen's code.
 
 ### Localization
 - `src/Localization/localization.json` maps `term → { description, contributions, translations: { English, ... } }`. Missing languages fall back to English.

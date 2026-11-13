@@ -108,16 +108,24 @@ namespace BoomerangFoo.Patches
                 && method.GetParameters()[0].ParameterType.IsAssignableFrom(typeof(Player)));
         }
 
+        // Harmony calls Prepare more than once; log only the first time
+        private static bool logged = false;
+
         static bool Prepare()
         {
             MethodBase target = TargetMethod();
             if (target == null)
             {
-                BoomerangFoo.Logger.LogWarning("LevelManager.SelectRandomPower not found. Pickup pools and spawn weights are disabled.");
+                if (!logged) BoomerangFoo.Logger.LogWarning("LevelManager.SelectRandomPower not found. Pickup pools and spawn weights are disabled.");
+                logged = true;
                 return false;
             }
-            string parameters = string.Join(", ", target.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
-            BoomerangFoo.Logger.LogInfo($"Patching LevelManager.SelectRandomPower({parameters}) for pickup pools and spawn weights");
+            if (!logged)
+            {
+                string parameters = string.Join(", ", target.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
+                BoomerangFoo.Logger.LogInfo($"Patching LevelManager.SelectRandomPower({parameters}) for pickup pools and spawn weights");
+            }
+            logged = true;
             return true;
         }
 

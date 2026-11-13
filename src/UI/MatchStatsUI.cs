@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using BoomerangFoo.GameModes;
 using BoomerangFoo.Patches;
 using BoomerangFoo.Stats;
+using HarmonyLib;
 using I2.Loc;
 using TMPro;
 using UnityEngine;
@@ -29,8 +31,10 @@ namespace BoomerangFoo.UI
         // Keeps the table between SAVE REPLAY and CONTINUE
         private const float MaxWidthShare = 0.56f;
         private const float BadgeWeight = 0.09f;
-        // On the winners screen the table starts this far up from the bottom of the screen
-        private const float WinnersTableTop = 0.45f;
+        // On the winners screen the table starts this far up from the bottom (just under the award cards)
+        // and is narrower, to stay clear of REMATCH / BACK TO MENU
+        private const float WinnersTableTop = 0.28f;
+        private const float WinnersWidthShare = 0.5f;
 
         private enum Stat { Kills, Deaths, KillDeath, Self, Clean, Nemesis, Victim }
 
@@ -71,6 +75,18 @@ namespace BoomerangFoo.UI
         // Score screen the rows' colours and bar shape come from; still used on the winners screen
         private static UIMenuRoundEnd scoreMenu;
         private static bool onWinnersScreen = false;
+        // Pressing R2 on the score screen fades it out to show the replay; the table fades with it
+        private static readonly FieldInfo roundEndCanvasGroup = AccessTools.Field(typeof(UIMenuRoundEnd), "canvasGroup");
+        private static readonly FieldInfo roundEndContent = AccessTools.Field(typeof(UIMenuRoundEnd), "content");
+        private static CanvasGroup tableGroup;
+        // The winners screen's buttons, which the table must not run under
+        private static readonly FieldInfo[] winnersButtonFields =
+        [
+            AccessTools.Field(typeof(UIMenuMatchEnd), "rematchButton"),
+            AccessTools.Field(typeof(UIMenuMatchEnd), "quitButton"),
+            AccessTools.Field(typeof(UIMenuMatchEnd), "wishlistButton"),
+        ];
+        private static bool loggedWinnersButtons = false;
         private static Rect lastBars;
         private static bool loggedNoRoom = false;
 
@@ -85,6 +101,7 @@ namespace BoomerangFoo.UI
             currentMenu = menu;
             onWinnersScreen = false;
             Layout(force: true);
+            FollowScoreScreenFade();
         }
 
         // The winners screen has no score bars, so the table sits in the lower part of the screen
@@ -113,6 +130,7 @@ namespace BoomerangFoo.UI
                     return;
                 }
                 Layout(force: false);
+                FollowScoreScreenFade();
             }
             catch (Exception e)
             {
@@ -120,6 +138,26 @@ namespace BoomerangFoo.UI
                 currentMenu = null;
                 Hide();
             }
+        }
+
+        // Matches the score screen's own visibility: its canvas group's alpha, or hidden if its content canvas is off
+        private static void FollowScoreScreenFade()
+        {
+            if (tableGroup == null) return;
+
+            float alpha = 1f;
+            if (!onWinnersScreen && scoreMenu != null)
+            {
+                if (roundEndCanvasGroup?.GetValue(scoreMenu) is CanvasGroup group && group != null)
+                {
+                    alpha = group.alpha;
+                }
+                if (roundEndContent?.GetValue(scoreMenu) is Canvas content && content != null && (!content.enabled || !content.gameObject.activeInHierarchy))
+                {
+                    alpha = 0f;
+                }
+            }
+            tableGroup.alpha = alpha;
         }
 
         private static void Hide()
@@ -142,7 +180,7 @@ namespace BoomerangFoo.UI
                 Hide();
                 return;
             }
-            if (!force && Mathf.Abs(bars.Value.yMin - lastBars.yMin) < 1f && Mathf.Abs(bars.Value.center.x - lastBars.center.x) < 1f) return;
+            if (!force && Mathf.Abs(bars.Value.yMin - lastBars.yMin) < 1f && Mathf.Abs(bars.Value.center.x - lastBars.center.x) < 1f && Mathf.Abs(bars.Value.width - lastBars.width) < 1f) return;
 
             lastBars = bars.Value;
             canvas.gameObject.SetActive(true);
@@ -170,19 +208,68 @@ namespace BoomerangFoo.UI
             tableRoot.anchorMin = new Vector2(0.5f, 0.5f);
             tableRoot.anchorMax = new Vector2(0.5f, 0.5f);
             tableRoot.pivot = new Vector2(0.5f, 1f);
+            tableGroup = root.AddComponent<CanvasGroup>();
+            tableGroup.interactable = false;
+            tableGroup.blocksRaycasts = false;
         }
 
-        // A zero-height strip whose bottom is where the table's top should be
+        // A zero-height strip whose bottom is where the table's top should be, and whose width is the table's.
+        // Centred, unless that would run under REMATCH / BACK TO MENU: then it ends just left of those buttons.
         private static Rect WinnersScreenAnchor()
         {
             Rect canvasRect = ((RectTransform)canvas.transform).rect;
-            float width = canvasRect.width * MaxWidthShare;
+            float width = canvasRect.width * WinnersWidthShare;
             float top = canvasRect.yMin + canvasRect.height * WinnersTableTop + Gap;
-            return Rect.MinMaxRect(-width / 2f, top, width / 2f, top);
+            float left = -width / 2f;
+            float right = width / 2f;
+
+            // Left edge of the buttons on the right half of the screen
+            float buttonsLeft = float.MaxValue;
+            if (currentMenu != null)
+            {
+                foreach (RectTransform button in WinnersButtons(currentMenu))
+                {
+                    Rect? bounds = LocalBounds(currentMenu, [button]);
+                    if (bounds == null) continue;
+                    if (!loggedWinnersButtons) BoomerangFoo.Logger.LogInfo($"Match stats: winners screen button {button.name} at x {bounds.Value.xMin:0} to {bounds.Value.xMax:0}, y {bounds.Value.yMin:0} to {bounds.Value.yMax:0} (screen {canvasRect.xMin:0} to {canvasRect.xMax:0})");
+                    if (bounds.Value.xMin > 0f) buttonsLeft = Mathf.Min(buttonsLeft, bounds.Value.xMin);
+                }
+                loggedWinnersButtons = loggedWinnersButtons || buttonsLeft < float.MaxValue;
+            }
+            if (buttonsLeft - Gap < right)
+            {
+                float shiftedRight = buttonsLeft - Gap;
+                float shiftedLeft = Mathf.Max(canvasRect.xMin + Gap, shiftedRight - width);
+                // Never squeeze the table to less than 60% of its width; an odd button layout keeps it centred
+                if (shiftedRight - shiftedLeft >= width * 0.6f)
+                {
+                    left = shiftedLeft;
+                    right = shiftedRight;
+                }
+            }
+            return Rect.MinMaxRect(left, top, right, top);
+        }
+
+        private static IEnumerable<RectTransform> WinnersButtons(UIMenuBase menu)
+        {
+            foreach (FieldInfo field in winnersButtonFields)
+            {
+                object value = field?.GetValue(menu);
+                GameObject button = value is Component component && component != null ? component.gameObject : value as GameObject;
+                if (button != null && button.activeInHierarchy && button.transform is RectTransform rect) yield return rect;
+            }
         }
 
         // Bounds of the visible score rows in this canvas's units (origin at the screen centre)
         private static Rect? BarsRect(UIMenuRoundEnd menu)
+        {
+            return LocalBounds(menu, menu.uiScoreRows
+                .Where(row => row != null && row.gameObject.activeInHierarchy)
+                .Select(row => (RectTransform)row.transform));
+        }
+
+        // Bounds of some of a menu's elements in this canvas's units (origin at the screen centre), or null if there are none
+        private static Rect? LocalBounds(Component menu, IEnumerable<RectTransform> elements)
         {
             Canvas menuCanvas = menu.GetComponentInParent<Canvas>();
             Camera camera = menuCanvas == null || menuCanvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : menuCanvas.rootCanvas.worldCamera;
@@ -190,10 +277,9 @@ namespace BoomerangFoo.UI
 
             float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
             bool any = false;
-            foreach (UIScoreRow row in menu.uiScoreRows)
+            foreach (RectTransform element in elements)
             {
-                if (row == null || !row.gameObject.activeInHierarchy) continue;
-                ((RectTransform)row.transform).GetWorldCorners(corners);
+                element.GetWorldCorners(corners);
                 foreach (Vector3 corner in corners)
                 {
                     Vector2 screen = RectTransformUtility.WorldToScreenPoint(camera, corner);
@@ -239,7 +325,10 @@ namespace BoomerangFoo.UI
 
             // Fit everything into the space under the score bars; when cramped, keep the top players by kills
             var canvasRect = ((RectTransform)canvas.transform).rect;
-            float width = Mathf.Min(bars.width, canvasRect.width * MaxWidthShare);
+            // A fixed share of the screen: the score bars shrink with short matches and would squish the table
+            // On the winners screen the anchor already holds the table's width and position
+            float width = onWinnersScreen ? bars.width : canvasRect.width * MaxWidthShare;
+            float centerX = onWinnersScreen ? bars.center.x : 0f;
             float top = bars.yMin - Gap;
             float available = top - (canvasRect.yMin + BottomMargin);
             float rowHeight = RowHeightFor(sections, available);
@@ -267,7 +356,7 @@ namespace BoomerangFoo.UI
                 if (y > 0f) y += SectionGap;
                 y = BuildSection(menu, gameManager, font, section, teamMatch, y, rowHeight, headerHeight);
             }
-            tableRoot.anchoredPosition = new Vector2(0f, top);
+            tableRoot.anchoredPosition = new Vector2(centerX, top);
             tableRoot.sizeDelta = new Vector2(width, y);
         }
 
@@ -467,9 +556,8 @@ namespace BoomerangFoo.UI
             return Term($"MatchStatsTeam{colorName}", $"TEAM {colorName.ToUpperInvariant()}");
         }
 
-        // The other player's character face plus "x2". In free-for-all the face comes from their score bar; team score
-        // bars don't show players, so otherwise it's their portrait from the character select grid, or failing that
-        // their name in their colour.
+        // The other player's character face plus "x2": the character's own score face (any mode), else in
+        // free-for-all their score bar's face, else their name in their colour.
         private static void CreateWho(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, GameManager gameManager, (int playerId, int count)? who, bool teamMatch, float rowHeight)
         {
             if (who == null)
@@ -481,19 +569,14 @@ namespace BoomerangFoo.UI
             int playerId = who.Value.playerId;
             Player other = gameManager.players.FirstOrDefault(player => player != null && player.playerID == playerId);
             string count = $"x{who.Value.count}";
-            Sprite face = null;
-            if (other != null && !teamMatch)
+            Sprite face = CharacterFaces.Get(other);
+            if (face == null && other != null && !teamMatch)
             {
                 int otherRow = gameManager.GetRowID(other);
                 if (otherRow >= 0 && otherRow < menu.uiScoreRows.Length && menu.uiScoreRows[otherRow] != null && menu.uiScoreRows[otherRow].characterIconSprite != null)
                 {
                     face = menu.uiScoreRows[otherRow].characterIconSprite.sprite;
                 }
-            }
-
-            if (face == null && other != null)
-            {
-                face = CharacterFaces.Get(other);
             }
 
             if (face == null)
