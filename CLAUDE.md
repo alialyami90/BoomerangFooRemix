@@ -20,6 +20,8 @@ Guidance for working in this repository.
   6. Checks that the installed DLL was updated.
   When work moves to another branch, update `BRANCH` in the .bat and the README link.
 - There are no automated tests. Changes have to be verified in-game. BepInEx logs go through `BoomerangFoo.Logger`.
+- `Diagnostics.Write()` (called after `PatchAll`) writes `BepInEx/BoomerangFoo-diagnostics.txt`. It contains the IL of `GameManager`'s `PrepareRound`, `SpawnPlayer`, `StartRoundSequence` and `EndMatch` coroutines, plus the fields (and enum values) of `Player`, `GameManager`, its character and input types, `UICharacterGridCell`, `UILobbyPlayer`, `UIScoreRow`, `UIMenuRoundEnd`, `UIManager`, and `UIMenuBase.MenuType`. The game's code isn't otherwise readable, so ask for this file when a fix depends on game internals.
+- Patches on game methods that might not exist are written as `[HarmonyPatch]` + `TargetMethod()` + `Prepare()` that returns false (with a warning) when the method is missing. A missing target named in a `[HarmonyPatch(typeof(X), "Name")]` attribute throws inside `PatchAll` and stops every patch from loading.
 
 ## Layout
 
@@ -90,6 +92,18 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 - Rows are **human players only** (a PLAYERS section, bar tinted with `character.Color`). In team matches a TEAMS section comes first: one row per team with KILLS, DEATHS, K/D and FELL / SELF, using that team's bar colour.
 - Teams are grouped by `player.team` (an int; this mod's modes use 1 and 2) and matched in order to the visible score rows. `GetRowID` must not be used for this, because for teams it returns the team number, which doesn't index `uiScoreRows`.
 - Team score rows show emblems instead of faces, so in team matches the "who" cells show a coloured name (P2 or BOT) instead of a face. When cramped, the PLAYERS section drops its lowest-kill rows first.
+
+### Powerup discard
+- `Controls/PowerupDiscard.cs`: while playing, a human player pressing D-pad down (Rewired gamepad template `dPad.down`) or Q (that player's Rewired keyboard) discards their newest powerup (last in `PowerupHud.OrderedPowerups`). It works in all modes.
+- It calls `ClearPowerups()` and then `StartPowerup` for the rest, so the game's own code removes the discarded effect. A kept Shield gets its remaining `shieldHitsLeft` back, or stays broken (`StopShield`) if it was already used up.
+- The player's `Rewired.Player` is found by reflection: a field on `Player`, then on `Player.playerInput`, then `ReInput.players.GetPlayer(playerID)`. Which one was used is logged once.
+
+### Character faces
+- `UI/CharacterFaces.Get(player)` returns a player's portrait from the lobby's `UICharacterGridCell`s. The player's character is the first field whose enum contains `Eggplant`, looked up on `Player`, then on `player.character`. A cell's portrait is its image whose sprite no other character's cell uses. The mapping is logged once.
+- Match stats "who" cells use the free-for-all score-row face first, then this, then a coloured name.
+
+### Match stats on the winners screen
+- `GameManager.EndMatch` (prefix, `PatchGameManager.OnPreEndMatch`) sets a flag. The next menu pushed through `UIManager.PushMenu` (`PatchUIManager.OnPostPushMenu`) that isn't `UIMenuRoundEnd` gets the stats table (`MatchStatsUI.ShowOnWinnersScreen`), anchored at 45% of the screen height and hidden when that menu closes. Row colours still come from the last `UIMenuRoundEnd`, whose rows are picked by `activeSelf`. Each menu type shown is logged once.
 
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:

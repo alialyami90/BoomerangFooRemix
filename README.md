@@ -61,6 +61,8 @@ The simplest way to disable the mod is to remove `Bepinex/plugins/BoomerangFoo/B
 3. Powerup modifiers (described below)
 3. Impossible bot difficulty: unlock the secret difficulty level buried in the game's code.
 4. UI changes: change gamemodes and settings in-game.
+6. Discard powerup: press D-pad down (or Q on the keyboard) to throw away the powerup you picked up most recently.
+7. Match stats: kills, deaths and more after every round and on the winners screen.
 5. Powerup display: each human player's current powerups are shown in a corner of the screen (P1 top-left, P2 top-right, P3 bottom-left, P4 bottom-right). Can be turned off in Modifiers.
 
 ## Powerup Modifiers

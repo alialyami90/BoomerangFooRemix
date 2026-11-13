@@ -41,6 +41,10 @@ namespace BoomerangFoo.Stats
         private static Player pendingVictim = null;
         private static bool pendingVictimCredited = false;
 
+        // Set when the match ends: the next menu the game shows (other than the score screen) is the winners screen
+        private static bool matchEnded = false;
+        private static readonly HashSet<string> loggedMenus = [];
+
         public static void Activate()
         {
             PatchGameManager.OnPreStartMatch += StartMatch;
@@ -48,6 +52,8 @@ namespace BoomerangFoo.Stats
             PatchGameManager.OnPreAddPlayerKill += AddPlayerKill;
             PatchPlayer.OnPostDieConfirmed += DieConfirmed;
             PatchUIMenuRoundEnd.OnPostInit += RoundEnd;
+            PatchGameManager.OnPreEndMatch += gameManager => matchEnded = true;
+            PatchUIManager.OnPostPushMenu += MenuShown;
             MatchStatsUI.Activate();
         }
 
@@ -63,6 +69,7 @@ namespace BoomerangFoo.Stats
 
         private static void StartMatch(GameManager gameManager)
         {
+            matchEnded = false;
             Players.Clear();
             diedThisRound.Clear();
             countedRound = -1;
@@ -125,6 +132,22 @@ namespace BoomerangFoo.Stats
             }
 
             MatchStatsUI.Show(menu);
+        }
+
+        private static void MenuShown(UIMenuBase menu)
+        {
+            if (menu == null) return;
+            string name = menu.GetType().Name;
+            if (loggedMenus.Add(name))
+            {
+                BoomerangFoo.Logger.LogInfo($"Menu shown: {name}{(matchEnded ? " (after match end)" : "")}");
+            }
+
+            if (matchEnded && !(menu is UIMenuRoundEnd))
+            {
+                matchEnded = false;
+                MatchStatsUI.ShowOnWinnersScreen(menu);
+            }
         }
 
         private static void Tally(Dictionary<int, (int count, int last)> tally, int playerId)

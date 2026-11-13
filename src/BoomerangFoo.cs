@@ -1,5 +1,6 @@
 ﻿using BepInEx;
 using BepInEx.Logging;
+using BoomerangFoo.Controls;
 using BoomerangFoo.GameModes;
 using BoomerangFoo.Patches;
 using BoomerangFoo.Powerups;
@@ -25,6 +26,7 @@ public class BoomerangFoo : BaseUnityPlugin
 
         var harmony = new Harmony("Jeffjewett27.patch");
         harmony.PatchAll();
+        Diagnostics.Write();
 
         // Register powerup hooks
         CustomPowerup.Registered.Add(BamboozlePowerup.Instance);
@@ -38,6 +40,7 @@ public class BoomerangFoo : BaseUnityPlugin
         CustomPowerup.ActivateAll();
 
         PowerupHud.Activate();
+        PowerupDiscard.Activate();
         MatchStats.Activate();
 
         GameMode.Register(new GameMode("Deathmatch", "ui_deathmatch", "ui_helper_deathmatch", SettingsManager.MatchType.DeathMatch, false, 0), GameMode.Slot.Deathmatch);

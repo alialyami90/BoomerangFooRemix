@@ -204,8 +204,8 @@ namespace BoomerangFoo.UI
             panel.shown = player.activePowerup;
         }
 
-        // Current powerups in the order they were collected
-        private static List<PowerupType> OrderedPowerups(Player player)
+        // Current powerups in the order they were collected (newest last)
+        internal static List<PowerupType> OrderedPowerups(Player player)
         {
             PowerupType active = player.activePowerup;
             List<PowerupType> ordered = [];
