@@ -21,9 +21,6 @@ namespace BoomerangFoo.Patches
         public static event Action<GameManager> OnPreStartMatch;
         public static void InvokePreStartMatch(GameManager gameManager) { OnPreStartMatch?.Invoke(gameManager); }
 
-        public static event Action<GameManager> OnPreEndMatch;
-        public static void InvokePreEndMatch(GameManager gameManager) { OnPreEndMatch?.Invoke(gameManager); }
-
         public static event Action<GameManager> OnPreStartRoundSequence;
         public static void InvokePreStartRoundSequence(GameManager gameManager) { OnPreStartRoundSequence?.Invoke(gameManager); }
 
@@ -71,25 +68,6 @@ namespace BoomerangFoo.Patches
         static void Prefix(GameManager __instance)
         {
             PatchGameManager.InvokePreStartMatch(__instance);
-        }
-    }
-
-    [HarmonyPatch]
-    class GameManagerEndMatchPatch
-    {
-        // Looked up rather than named in the attribute: a missing method would stop every patch from loading
-        static MethodBase TargetMethod() => AccessTools.Method(typeof(GameManager), "EndMatch");
-
-        static bool Prepare()
-        {
-            if (TargetMethod() != null) return true;
-            BoomerangFoo.Logger.LogWarning("GameManager.EndMatch not found. Stats on the winners screen are disabled.");
-            return false;
-        }
-
-        static void Prefix(GameManager __instance)
-        {
-            PatchGameManager.InvokePreEndMatch(__instance);
         }
     }
 
@@ -261,6 +239,37 @@ namespace BoomerangFoo.Patches
                 __instance.powerupBars[i] = powerupObject.GetComponent<PowerupBar>();
 
             }
+
+            // PrepareRound also indexes healthBars by player; left at 6 it threw IndexOutOfRange for player 7,
+            // which stopped later players getting their bars and froze the round start
+            ExtendBars(__instance, "healthBars", maxPlayers);
+            ExtendBars(__instance, "decoyHealthBars", maxPlayers);
+        }
+
+        // Grows a per-player UI array field to maxPlayers, cloning the original entries in turn.
+        // Reached by reflection since these fields may not be public.
+        private static void ExtendBars(GameManager gameManager, string fieldName, int maxPlayers)
+        {
+            FieldInfo field = AccessTools.Field(typeof(GameManager), fieldName);
+            if (field == null || !field.FieldType.IsArray)
+            {
+                BoomerangFoo.Logger.LogWarning($"GameManager.{fieldName} not found; more than 6 players may not work.");
+                return;
+            }
+
+            Array bars = (Array)field.GetValue(gameManager);
+            if (bars == null || bars.Length == 0 || bars.Length >= maxPlayers) return;
+
+            Array extended = Array.CreateInstance(field.FieldType.GetElementType(), maxPlayers);
+            Array.Copy(bars, extended, bars.Length);
+            for (int i = bars.Length; i < maxPlayers; i++)
+            {
+                if (!(bars.GetValue(i % bars.Length) is Component original) || original == null) continue;
+                GameObject copy = UnityEngine.Object.Instantiate(original.gameObject);
+                copy.transform.SetParent(original.transform.parent, false);
+                extended.SetValue(copy.GetComponent(original.GetType()), i);
+            }
+            field.SetValue(gameManager, extended);
         }
     }
 }

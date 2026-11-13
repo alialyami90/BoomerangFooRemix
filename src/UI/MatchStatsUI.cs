@@ -29,8 +29,10 @@ namespace BoomerangFoo.UI
         // Keeps the table between SAVE REPLAY and CONTINUE
         private const float MaxWidthShare = 0.56f;
         private const float BadgeWeight = 0.09f;
-        // On the winners screen the table starts this far up from the bottom of the screen
-        private const float WinnersTableTop = 0.45f;
+        // On the winners screen the table starts this far up from the bottom (just under the award cards)
+        // and is narrower, to stay clear of REMATCH / BACK TO MENU
+        private const float WinnersTableTop = 0.28f;
+        private const float WinnersWidthShare = 0.5f;
 
         private enum Stat { Kills, Deaths, KillDeath, Self, Clean, Nemesis, Victim }
 
@@ -176,7 +178,7 @@ namespace BoomerangFoo.UI
         private static Rect WinnersScreenAnchor()
         {
             Rect canvasRect = ((RectTransform)canvas.transform).rect;
-            float width = canvasRect.width * MaxWidthShare;
+            float width = canvasRect.width * WinnersWidthShare;
             float top = canvasRect.yMin + canvasRect.height * WinnersTableTop + Gap;
             return Rect.MinMaxRect(-width / 2f, top, width / 2f, top);
         }
@@ -239,7 +241,8 @@ namespace BoomerangFoo.UI
 
             // Fit everything into the space under the score bars; when cramped, keep the top players by kills
             var canvasRect = ((RectTransform)canvas.transform).rect;
-            float width = Mathf.Min(bars.width, canvasRect.width * MaxWidthShare);
+            // A fixed share of the screen: the score bars shrink with short matches and would squish the table
+            float width = canvasRect.width * (onWinnersScreen ? WinnersWidthShare : MaxWidthShare);
             float top = bars.yMin - Gap;
             float available = top - (canvasRect.yMin + BottomMargin);
             float rowHeight = RowHeightFor(sections, available);
@@ -467,9 +470,8 @@ namespace BoomerangFoo.UI
             return Term($"MatchStatsTeam{colorName}", $"TEAM {colorName.ToUpperInvariant()}");
         }
 
-        // The other player's character face plus "x2". In free-for-all the face comes from their score bar; team score
-        // bars don't show players, so otherwise it's their portrait from the character select grid, or failing that
-        // their name in their colour.
+        // The other player's character face plus "x2": the character's own score face (any mode), else in
+        // free-for-all their score bar's face, else their name in their colour.
         private static void CreateWho(RectTransform cell, TMP_FontAsset font, UIMenuRoundEnd menu, GameManager gameManager, (int playerId, int count)? who, bool teamMatch, float rowHeight)
         {
             if (who == null)
@@ -481,19 +483,14 @@ namespace BoomerangFoo.UI
             int playerId = who.Value.playerId;
             Player other = gameManager.players.FirstOrDefault(player => player != null && player.playerID == playerId);
             string count = $"x{who.Value.count}";
-            Sprite face = null;
-            if (other != null && !teamMatch)
+            Sprite face = CharacterFaces.Get(other);
+            if (face == null && other != null && !teamMatch)
             {
                 int otherRow = gameManager.GetRowID(other);
                 if (otherRow >= 0 && otherRow < menu.uiScoreRows.Length && menu.uiScoreRows[otherRow] != null && menu.uiScoreRows[otherRow].characterIconSprite != null)
                 {
                     face = menu.uiScoreRows[otherRow].characterIconSprite.sprite;
                 }
-            }
-
-            if (face == null && other != null)
-            {
-                face = CharacterFaces.Get(other);
             }
 
             if (face == null)
