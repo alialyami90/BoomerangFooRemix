@@ -79,6 +79,14 @@ namespace BoomerangFoo.UI
         private static readonly FieldInfo roundEndCanvasGroup = AccessTools.Field(typeof(UIMenuRoundEnd), "canvasGroup");
         private static readonly FieldInfo roundEndContent = AccessTools.Field(typeof(UIMenuRoundEnd), "content");
         private static CanvasGroup tableGroup;
+        // The winners screen's buttons, which the table must not run under
+        private static readonly FieldInfo[] winnersButtonFields =
+        [
+            AccessTools.Field(typeof(UIMenuMatchEnd), "rematchButton"),
+            AccessTools.Field(typeof(UIMenuMatchEnd), "quitButton"),
+            AccessTools.Field(typeof(UIMenuMatchEnd), "wishlistButton"),
+        ];
+        private static bool loggedWinnersButtons = false;
         private static Rect lastBars;
         private static bool loggedNoRoom = false;
 
@@ -172,7 +180,7 @@ namespace BoomerangFoo.UI
                 Hide();
                 return;
             }
-            if (!force && Mathf.Abs(bars.Value.yMin - lastBars.yMin) < 1f && Mathf.Abs(bars.Value.center.x - lastBars.center.x) < 1f) return;
+            if (!force && Mathf.Abs(bars.Value.yMin - lastBars.yMin) < 1f && Mathf.Abs(bars.Value.center.x - lastBars.center.x) < 1f && Mathf.Abs(bars.Value.width - lastBars.width) < 1f) return;
 
             lastBars = bars.Value;
             canvas.gameObject.SetActive(true);
@@ -205,17 +213,63 @@ namespace BoomerangFoo.UI
             tableGroup.blocksRaycasts = false;
         }
 
-        // A zero-height strip whose bottom is where the table's top should be
+        // A zero-height strip whose bottom is where the table's top should be, and whose width is the table's.
+        // Centred, unless that would run under REMATCH / BACK TO MENU: then it ends just left of those buttons.
         private static Rect WinnersScreenAnchor()
         {
             Rect canvasRect = ((RectTransform)canvas.transform).rect;
             float width = canvasRect.width * WinnersWidthShare;
             float top = canvasRect.yMin + canvasRect.height * WinnersTableTop + Gap;
-            return Rect.MinMaxRect(-width / 2f, top, width / 2f, top);
+            float left = -width / 2f;
+            float right = width / 2f;
+
+            // Left edge of the buttons on the right half of the screen
+            float buttonsLeft = float.MaxValue;
+            if (currentMenu != null)
+            {
+                foreach (RectTransform button in WinnersButtons(currentMenu))
+                {
+                    Rect? bounds = LocalBounds(currentMenu, [button]);
+                    if (bounds == null) continue;
+                    if (!loggedWinnersButtons) BoomerangFoo.Logger.LogInfo($"Match stats: winners screen button {button.name} at x {bounds.Value.xMin:0} to {bounds.Value.xMax:0}, y {bounds.Value.yMin:0} to {bounds.Value.yMax:0} (screen {canvasRect.xMin:0} to {canvasRect.xMax:0})");
+                    if (bounds.Value.xMin > 0f) buttonsLeft = Mathf.Min(buttonsLeft, bounds.Value.xMin);
+                }
+                loggedWinnersButtons = loggedWinnersButtons || buttonsLeft < float.MaxValue;
+            }
+            if (buttonsLeft - Gap < right)
+            {
+                float shiftedRight = buttonsLeft - Gap;
+                float shiftedLeft = Mathf.Max(canvasRect.xMin + Gap, shiftedRight - width);
+                // Never squeeze the table to less than 60% of its width; an odd button layout keeps it centred
+                if (shiftedRight - shiftedLeft >= width * 0.6f)
+                {
+                    left = shiftedLeft;
+                    right = shiftedRight;
+                }
+            }
+            return Rect.MinMaxRect(left, top, right, top);
+        }
+
+        private static IEnumerable<RectTransform> WinnersButtons(UIMenuBase menu)
+        {
+            foreach (FieldInfo field in winnersButtonFields)
+            {
+                object value = field?.GetValue(menu);
+                GameObject button = value is Component component && component != null ? component.gameObject : value as GameObject;
+                if (button != null && button.activeInHierarchy && button.transform is RectTransform rect) yield return rect;
+            }
         }
 
         // Bounds of the visible score rows in this canvas's units (origin at the screen centre)
         private static Rect? BarsRect(UIMenuRoundEnd menu)
+        {
+            return LocalBounds(menu, menu.uiScoreRows
+                .Where(row => row != null && row.gameObject.activeInHierarchy)
+                .Select(row => (RectTransform)row.transform));
+        }
+
+        // Bounds of some of a menu's elements in this canvas's units (origin at the screen centre), or null if there are none
+        private static Rect? LocalBounds(Component menu, IEnumerable<RectTransform> elements)
         {
             Canvas menuCanvas = menu.GetComponentInParent<Canvas>();
             Camera camera = menuCanvas == null || menuCanvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : menuCanvas.rootCanvas.worldCamera;
@@ -223,10 +277,9 @@ namespace BoomerangFoo.UI
 
             float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
             bool any = false;
-            foreach (UIScoreRow row in menu.uiScoreRows)
+            foreach (RectTransform element in elements)
             {
-                if (row == null || !row.gameObject.activeInHierarchy) continue;
-                ((RectTransform)row.transform).GetWorldCorners(corners);
+                element.GetWorldCorners(corners);
                 foreach (Vector3 corner in corners)
                 {
                     Vector2 screen = RectTransformUtility.WorldToScreenPoint(camera, corner);
@@ -273,7 +326,9 @@ namespace BoomerangFoo.UI
             // Fit everything into the space under the score bars; when cramped, keep the top players by kills
             var canvasRect = ((RectTransform)canvas.transform).rect;
             // A fixed share of the screen: the score bars shrink with short matches and would squish the table
-            float width = canvasRect.width * (onWinnersScreen ? WinnersWidthShare : MaxWidthShare);
+            // On the winners screen the anchor already holds the table's width and position
+            float width = onWinnersScreen ? bars.width : canvasRect.width * MaxWidthShare;
+            float centerX = onWinnersScreen ? bars.center.x : 0f;
             float top = bars.yMin - Gap;
             float available = top - (canvasRect.yMin + BottomMargin);
             float rowHeight = RowHeightFor(sections, available);
@@ -301,7 +356,7 @@ namespace BoomerangFoo.UI
                 if (y > 0f) y += SectionGap;
                 y = BuildSection(menu, gameManager, font, section, teamMatch, y, rowHeight, headerHeight);
             }
-            tableRoot.anchoredPosition = new Vector2(0f, top);
+            tableRoot.anchoredPosition = new Vector2(centerX, top);
             tableRoot.sizeDelta = new Vector2(width, y);
         }
 

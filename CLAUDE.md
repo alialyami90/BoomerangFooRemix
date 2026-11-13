@@ -105,7 +105,7 @@ Game modes and powerups subscribe in `Hook()`/`Activate()` and unsubscribe in `U
 
 ### Match stats on the winners screen
 - The winners screen is `UIMenuMatchEnd`. When `UIManager.PushMenu` (`PatchUIManager.OnPostPushMenu`) shows it, `MatchStatsUI.ShowOnWinnersScreen` draws the stats table there and hides it when that menu closes. `GameManager.EndMatch` is not a usable signal: it doesn't run in a normal match.
-- On that screen the table's top sits at 28% of the screen height, just under the award cards, at 50% width so it clears REMATCH / BACK TO MENU. Row colours still come from the last `UIMenuRoundEnd`, whose rows are picked by `activeSelf`. Each menu type shown is logged once; the menus seen are UIMenuSplash, UIMenuMain, UIMenuLobby, UIMenuMatchSettings, UIMenuInstructions, UIMenuRoundTitles, UIMenuRoundEnd and UIMenuMatchEnd.
+- On that screen the table's top sits at 28% of the screen height, just under the award cards, at 50% width. If that would run under REMATCH / BACK TO MENU (`rematchButton`, `quitButton`, `wishlistButton`, right half of the screen only), it ends just left of them instead, never narrower than 60% of its width. The buttons' bounds are logged once. Row colours still come from the last `UIMenuRoundEnd`, whose rows are picked by `activeSelf`. Each menu type shown is logged once; the menus seen are UIMenuSplash, UIMenuMain, UIMenuLobby, UIMenuMatchSettings, UIMenuInstructions, UIMenuRoundTitles, UIMenuRoundEnd and UIMenuMatchEnd.
 
 ### Players > 6
 `ModSettings.Instance.MaxPlayers` (12) drives several patches:
