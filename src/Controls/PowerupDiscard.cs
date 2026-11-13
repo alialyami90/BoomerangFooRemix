@@ -53,7 +53,7 @@ namespace BoomerangFoo.Controls
                 return humanCount == 1 && Input.GetKeyDown(KeyCode.Q);
             }
 
-            if (input.controllers.hasKeyboard && input.controllers.Keyboard.GetKeyDown(KeyCode.Q)) return true;
+            if (input.controllers.hasKeyboard && input.controllers.Keyboard.GetKeyDown(Rewired.KeyboardKeyCode.Q)) return true;
             foreach (Rewired.Joystick joystick in input.controllers.Joysticks)
             {
                 Rewired.IGamepadTemplate gamepad = joystick.GetTemplate<Rewired.IGamepadTemplate>();
