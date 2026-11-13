@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using BoomerangFoo.GameModes;
 using BoomerangFoo.Patches;
 using BoomerangFoo.Stats;
+using HarmonyLib;
 using I2.Loc;
 using TMPro;
 using UnityEngine;
@@ -73,6 +75,10 @@ namespace BoomerangFoo.UI
         // Score screen the rows' colours and bar shape come from; still used on the winners screen
         private static UIMenuRoundEnd scoreMenu;
         private static bool onWinnersScreen = false;
+        // Pressing R2 on the score screen fades it out to show the replay; the table fades with it
+        private static readonly FieldInfo roundEndCanvasGroup = AccessTools.Field(typeof(UIMenuRoundEnd), "canvasGroup");
+        private static readonly FieldInfo roundEndContent = AccessTools.Field(typeof(UIMenuRoundEnd), "content");
+        private static CanvasGroup tableGroup;
         private static Rect lastBars;
         private static bool loggedNoRoom = false;
 
@@ -87,6 +93,7 @@ namespace BoomerangFoo.UI
             currentMenu = menu;
             onWinnersScreen = false;
             Layout(force: true);
+            FollowScoreScreenFade();
         }
 
         // The winners screen has no score bars, so the table sits in the lower part of the screen
@@ -115,6 +122,7 @@ namespace BoomerangFoo.UI
                     return;
                 }
                 Layout(force: false);
+                FollowScoreScreenFade();
             }
             catch (Exception e)
             {
@@ -122,6 +130,26 @@ namespace BoomerangFoo.UI
                 currentMenu = null;
                 Hide();
             }
+        }
+
+        // Matches the score screen's own visibility: its canvas group's alpha, or hidden if its content canvas is off
+        private static void FollowScoreScreenFade()
+        {
+            if (tableGroup == null) return;
+
+            float alpha = 1f;
+            if (!onWinnersScreen && scoreMenu != null)
+            {
+                if (roundEndCanvasGroup?.GetValue(scoreMenu) is CanvasGroup group && group != null)
+                {
+                    alpha = group.alpha;
+                }
+                if (roundEndContent?.GetValue(scoreMenu) is Canvas content && content != null && (!content.enabled || !content.gameObject.activeInHierarchy))
+                {
+                    alpha = 0f;
+                }
+            }
+            tableGroup.alpha = alpha;
         }
 
         private static void Hide()
@@ -172,6 +200,9 @@ namespace BoomerangFoo.UI
             tableRoot.anchorMin = new Vector2(0.5f, 0.5f);
             tableRoot.anchorMax = new Vector2(0.5f, 0.5f);
             tableRoot.pivot = new Vector2(0.5f, 1f);
+            tableGroup = root.AddComponent<CanvasGroup>();
+            tableGroup.interactable = false;
+            tableGroup.blocksRaycasts = false;
         }
 
         // A zero-height strip whose bottom is where the table's top should be
